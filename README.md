@@ -36,3 +36,6 @@ A python script that uses AI to generate and type "wholesome" (or edgy, or salty
 ## Customization
 Edit `prompts.json` to add your own personas or change the style of existing ones.
 
+## Learnings & Architecture
+This project served as a playground for learning how to build robust GenAI wrappers for real-time applications. 
+Check out [LEARNINGS.md](./LEARNINGS.md) for a deep dive into the architectural patterns (Strategy, DI), prompt engineering techniques, and pitfalls encountered during development.

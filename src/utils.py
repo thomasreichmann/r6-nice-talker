@@ -2,9 +2,9 @@ import time
 import logging
 import functools
 import re
-import pydirectinput
 
 logger = logging.getLogger(__name__)
+
 
 def measure_latency(description: str = None):
     """
@@ -30,9 +30,16 @@ def measure_latency(description: str = None):
         return wrapper
     return decorator
 
+
 def remove_emojis(text: str) -> str:
     """
     Removes emojis and other non-BMP characters from a string.
+    
+    Args:
+        text (str): The string to remove emojis from.
+        
+    Returns:
+        str: The cleaned string with emojis removed.
     """
     # Matches standard emoji unicode ranges
     # This regex handles most common emojis
@@ -48,20 +55,3 @@ def remove_emojis(text: str) -> str:
     
     return emoji_pattern.sub(r'', text).strip()
 
-def safe_keypress(key: str, duration: float = 0.05):
-    """
-    Safely presses a key by holding it down for a specified duration.
-    Essential for games that don't register instantaneous inputs.
-    """
-    pydirectinput.keyDown(key)
-    time.sleep(duration)
-    pydirectinput.keyUp(key)
-
-def patch_pydirectinput():
-    """
-    Monkey-patches pydirectinput to include a custom 'press_safe' method.
-    This allows us to call pydirectinput.press_safe('y') anywhere in the codebase.
-    """
-    if not hasattr(pydirectinput, 'press_safe'):
-        pydirectinput.press_safe = safe_keypress
-        logger.info("Monkey-patched pydirectinput with 'press_safe' method.")

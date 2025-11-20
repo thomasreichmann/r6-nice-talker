@@ -2,6 +2,7 @@ from src.interfaces import IMessageProvider, ISwitchableMessageProvider
 from src.config import Config
 from src.utils import measure_latency, remove_emojis
 from src.context import get_random_context
+from src.constants import BASE_SYSTEM_PROMPT
 from src.sounds import SoundManager
 import random
 import json
@@ -13,19 +14,28 @@ logger = logging.getLogger(__name__)
 
 class FixedMessageProvider(IMessageProvider):
     """
-    Always returns the same fixed string.
+    A simple message provider that always returns the same fixed string.
+    Useful for testing or sending the same message repeatedly.
+    
+    Args:
+        message (str): The fixed message to always return.
     """
-    def __init__(self, message: str):
+    def __init__(self, message: str) -> None:
         self.message = message
 
     def get_message(self) -> str:
         return self.message
 
+
 class RandomMessageProvider(IMessageProvider):
     """
-    Returns a random message from a list.
+    Returns a random message from a predefined list.
+    Useful for adding variety without AI generation.
+    
+    Args:
+        messages (list[str]): List of possible messages to choose from.
     """
-    def __init__(self, messages: list[str]):
+    def __init__(self, messages: list[str]) -> None:
         self.messages = messages
 
     def get_message(self) -> str:
@@ -36,7 +46,12 @@ class RandomMessageProvider(IMessageProvider):
 class ChatGPTProvider(ISwitchableMessageProvider):
     """
     Generates messages using OpenAI's ChatGPT API based on selectable personas.
-    Loads personas from prompts.json.
+    Loads personas from prompts.json and uses the BASE_SYSTEM_PROMPT for all interactions.
+    
+    Args:
+        api_key (str): OpenAI API key for authentication.
+        model (str): The OpenAI model to use (defaults to gpt-3.5-turbo).
+        prompts_file (str): Path to JSON file containing persona definitions.
     """
     def __init__(self, api_key: str, model: str = "gpt-3.5-turbo", prompts_file: str = "prompts.json"):
         self.client = OpenAI(api_key=api_key)
@@ -46,17 +61,6 @@ class ChatGPTProvider(ISwitchableMessageProvider):
         
         # Store the last 5 generated messages to maintain context/style consistency
         self.history = deque(maxlen=5)
-        
-        # Global instructions that apply to ALL personas
-        self.base_instructions = (
-            "You are a player in a Rainbow Six Siege match. "
-            "Write a single, short in-game chat message (under 120 chars). "
-            "Adopt the vernacular of a digital native gamer (informal, rapid-fire, low-effort typing). "
-            "Use text-based emoticons if needed, but never emojis. "
-            "Write like a stream of consciousness or Twitch chat. Avoid punctuation and uppercase letters unless for emphasis. "
-            "Never use formal greetings like 'Hey team' or 'Hello'. "
-            "Your response must strictly follow the style of the assigned Persona."
-        )
         
         if not self.prompts:
             # Fallback if file is empty or missing
@@ -71,6 +75,15 @@ class ChatGPTProvider(ISwitchableMessageProvider):
         logger.info(f"ChatGPTProvider initialized with {len(self.prompts)} personas.")
         logger.info(f"Current Persona: {self.get_current_mode_name()}")
     def _load_prompts(self, filepath: str) -> list[dict]:
+        """
+        Loads persona definitions from a JSON file.
+        
+        Args:
+            filepath (str): Path to the prompts JSON file.
+            
+        Returns:
+            list[dict]: List of persona dictionaries with 'name' and 'prompt' keys.
+        """
         try:
             with open(filepath, 'r') as f:
                 data = json.load(f)
@@ -81,14 +94,20 @@ class ChatGPTProvider(ISwitchableMessageProvider):
 
     @measure_latency(description="ChatGPT Generation")
     def get_message(self) -> str:
+        """
+        Generates a chat message using the current persona and a random game context.
+        
+        Returns:
+            str: Generated chat message suitable for in-game use.
+        """
         current_persona = self.prompts[self.current_index]
         style_prompt = current_persona["prompt"]
         context_scenario = get_random_context()
         
         logger.info(f"Generating message with persona: {current_persona['name']} | Context: {context_scenario}")
         
-        # Construct a dynamic prompt
-        final_system_prompt = f"{self.base_instructions}\n\nPersona/Style: {style_prompt}"
+        # Construct a dynamic prompt using the centralized base prompt
+        final_system_prompt = f"{BASE_SYSTEM_PROMPT}\n\nPersona/Style: {style_prompt}"
         user_prompt = f"Current Match Situation: {context_scenario}\nWrite a chat message reacting to this situation."
         
         # Build message list with history

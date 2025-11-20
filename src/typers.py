@@ -1,3 +1,7 @@
+"""
+Chat typer implementations for sending messages to games.
+Handles keyboard input simulation and game-specific chat interactions.
+"""
 import pydirectinput
 import time
 import logging
@@ -6,11 +10,17 @@ from src.config import Config
 
 logger = logging.getLogger(__name__)
 
+
 class R6SiegeTyper(IChatTyper):
     """
     Implements the specific typing logic for Rainbow Six Siege.
+    Opens chat with 'y', types the message, and presses Enter.
+    
+    Args:
+        open_chat_delay (float): Delay after opening chat before typing (default: 0.2s).
+        typing_interval (float): Delay between each keystroke (default: 0.01s).
     """
-    def __init__(self, open_chat_delay: float = 0.2, typing_interval: float = 0.01):
+    def __init__(self, open_chat_delay: float = 0.2, typing_interval: float = 0.01) -> None:
         self.open_chat_delay = open_chat_delay
         self.typing_interval = typing_interval
         self.max_length = Config.MAX_MESSAGE_LENGTH
@@ -20,6 +30,13 @@ class R6SiegeTyper(IChatTyper):
         pydirectinput.PAUSE = 0.0
 
     def send(self, message: str) -> None:
+        """
+        Sends a message to Rainbow Six Siege chat.
+        Opens chat, types the message character by character, and presses Enter.
+        
+        Args:
+            message (str): The message to send in chat.
+        """
         # Validation: Truncate message if too long
         final_message = message
         if len(final_message) > self.max_length:
@@ -51,9 +68,17 @@ class R6SiegeTyper(IChatTyper):
         # 5. Send
         pydirectinput.press_safe('enter')
 
+
 class DebugTyper(IChatTyper):
     """
-    Just prints to console. Useful for testing without game running.
+    Debug typer that prints messages to console instead of sending to game.
+    Useful for testing without the game running.
     """
     def send(self, message: str) -> None:
+        """
+        Prints the message to debug log instead of sending to game.
+        
+        Args:
+            message (str): The message to log.
+        """
         logger.debug(f"[DEBUG] Opening Chat -> Typing: '{message}' -> Enter")

@@ -1,3 +1,6 @@
+"""
+Main bot application module that controls hotkey bindings and message generation workflow.
+"""
 import keyboard
 import logging
 from src.interfaces import IMessageProvider, IChatTyper, ISwitchableMessageProvider
@@ -5,10 +8,18 @@ from src.sounds import SoundManager
 
 logger = logging.getLogger(__name__)
 
+
 class AutoChatBot:
     """
-    The main application controller.
-    Binds a hotkey to a sequence of getting a message and typing it.
+    The main application controller that orchestrates message generation and typing.
+    Binds hotkeys to trigger message generation and persona switching.
+    
+    Args:
+        trigger_key (str): The hotkey to trigger message generation.
+        message_provider (IMessageProvider): The provider that generates messages.
+        chat_typer (IChatTyper): The typer that sends messages to the game.
+        next_mode_key (str, optional): Hotkey to switch to next persona.
+        prev_mode_key (str, optional): Hotkey to switch to previous persona.
     """
     def __init__(
         self, 
@@ -17,7 +28,7 @@ class AutoChatBot:
         chat_typer: IChatTyper,
         next_mode_key: str = None,
         prev_mode_key: str = None
-    ):
+    ) -> None:
         self.trigger_key = trigger_key
         self.provider = message_provider
         self.typer = chat_typer
@@ -25,7 +36,11 @@ class AutoChatBot:
         self.prev_mode_key = prev_mode_key
         self.is_running = False
 
-    def _execute_macro(self):
+    def _execute_macro(self) -> None:
+        """
+        Executes the main macro: generates a message and types it into the game.
+        Plays audio feedback for success or error states.
+        """
         try:
             # Audio Feedback: Operation Started
             SoundManager.play_success()
@@ -39,21 +54,18 @@ class AutoChatBot:
             logger.error(f"Error executing macro: {e}", exc_info=True)
             SoundManager.play_error()
 
-    def _next_mode(self):
+    def _next_mode(self) -> None:
         if isinstance(self.provider, ISwitchableMessageProvider):
             self.provider.next_mode()
-            # Sound played inside provider logic based on index
-            # SoundManager.play_mode_switch() <-- Removed as provider handles specific sound
 
-    def _prev_mode(self):
+    def _prev_mode(self) -> None:
         if isinstance(self.provider, ISwitchableMessageProvider):
             self.provider.prev_mode()
-            # Sound played inside provider logic based on index
-            # SoundManager.play_mode_switch() <-- Removed as provider handles specific sound
 
-    def start(self):
+    def start(self) -> None:
         """
-        Starts the listener loop.
+        Starts the keyboard listener loop and registers all hotkeys.
+        Blocks until the user presses ESC or Ctrl+C to exit.
         """
         logger.info("Program started.")
         logger.info(f"Using Provider: {self.provider.__class__.__name__}")
@@ -84,10 +96,7 @@ class AutoChatBot:
         finally:
             self.stop()
 
-    def stop(self):
-        """
-        Clean up resources.
-        """
+    def stop(self) -> None:
         logger.info("Cleaning up...")
         try:
             keyboard.unhook_all()

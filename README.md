@@ -1,6 +1,6 @@
 # R6 Nice Talker
 
-A python script that uses AI to generate and type "wholesome" (or edgy, or salty) messages in Rainbow Six Siege chat to farm reputation points.
+A python script that uses AI to generate and type "wholesome" (or edgy, or salty) messages in Rainbow Six Siege chat.
 
 ## Features
 - **AI-Powered**: Uses OpenAI (ChatGPT) to generate unique, context-aware messages.

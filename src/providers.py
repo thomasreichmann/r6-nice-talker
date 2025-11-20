@@ -8,7 +8,7 @@ import random
 import json
 import logging
 from collections import deque
-from openai import OpenAI
+from openai import AsyncOpenAI
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +23,7 @@ class FixedMessageProvider(IMessageProvider):
     def __init__(self, message: str) -> None:
         self.message = message
 
-    def get_message(self) -> str:
+    async def get_message(self) -> str:
         return self.message
 
 
@@ -38,7 +38,7 @@ class RandomMessageProvider(IMessageProvider):
     def __init__(self, messages: list[str]) -> None:
         self.messages = messages
 
-    def get_message(self) -> str:
+    async def get_message(self) -> str:
         if not self.messages:
             return ""
         return random.choice(self.messages)
@@ -54,7 +54,7 @@ class ChatGPTProvider(ISwitchableMessageProvider):
         prompts_file (str): Path to JSON file containing persona definitions.
     """
     def __init__(self, api_key: str, model: str = "gpt-3.5-turbo", prompts_file: str = "prompts.json"):
-        self.client = OpenAI(api_key=api_key)
+        self.client = AsyncOpenAI(api_key=api_key)
         self.model = model
         self.prompts = self._load_prompts(prompts_file)
         self.current_index = 0
@@ -93,7 +93,7 @@ class ChatGPTProvider(ISwitchableMessageProvider):
             return []
 
     @measure_latency(description="ChatGPT Generation")
-    def get_message(self) -> str:
+    async def get_message(self) -> str:
         """
         Generates a chat message using the current persona and a random game context.
         
@@ -121,7 +121,7 @@ class ChatGPTProvider(ISwitchableMessageProvider):
         messages.append({"role": "user", "content": user_prompt})
         
         try:
-            response = self.client.chat.completions.create(
+            response = await self.client.chat.completions.create(
                 model=self.model,
                 messages=messages,
                 max_tokens=60, # Keep it short for chat limits

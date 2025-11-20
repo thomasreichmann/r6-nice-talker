@@ -5,7 +5,7 @@ class IMessageProvider(ABC):
     Interface for providing messages to be sent.
     """
     @abstractmethod
-    def get_message(self) -> str:
+    async def get_message(self) -> str:
         """Returns the next message to be sent."""
         pass
 
@@ -33,7 +33,7 @@ class IChatTyper(ABC):
     Interface for handling the physical typing/sending of the message.
     """
     @abstractmethod
-    def send(self, message: str) -> None:
+    async def send(self, message: str) -> None:
         """
         Handles the logic of opening chat, typing, and pressing enter.
         """

@@ -3,8 +3,10 @@ Main bot application module that controls hotkey bindings and message generation
 """
 import keyboard
 import logging
+import asyncio
 from src.interfaces import IMessageProvider, IChatTyper, ISwitchableMessageProvider
 from src.sounds import SoundManager
+from src.events import EventBus, Event, EventType
 
 logger = logging.getLogger(__name__)
 
@@ -18,6 +20,7 @@ class AutoChatBot:
         trigger_key (str): The hotkey to trigger message generation.
         message_provider (IMessageProvider): The provider that generates messages.
         chat_typer (IChatTyper): The typer that sends messages to the game.
+        event_bus (EventBus): The event bus for async event communication.
         next_mode_key (str, optional): Hotkey to switch to next persona.
         prev_mode_key (str, optional): Hotkey to switch to previous persona.
     """
@@ -26,46 +29,84 @@ class AutoChatBot:
         trigger_key: str, 
         message_provider: IMessageProvider, 
         chat_typer: IChatTyper,
+        event_bus: EventBus,
         next_mode_key: str = None,
         prev_mode_key: str = None
     ) -> None:
         self.trigger_key = trigger_key
         self.provider = message_provider
         self.typer = chat_typer
+        self.event_bus = event_bus
         self.next_mode_key = next_mode_key
         self.prev_mode_key = prev_mode_key
         self.is_running = False
 
-    def _execute_macro(self) -> None:
+    async def _process_trigger_chat(self) -> None:
         """
-        Executes the main macro: generates a message and types it into the game.
-        Plays audio feedback for success or error states.
+        Handles the TRIGGER_CHAT event: generates a message and types it.
         """
         try:
             # Audio Feedback: Operation Started
             SoundManager.play_success()
             
-            # Get the content
-            msg = self.provider.get_message()
+            # Get the content (awaitable now)
+            msg = await self.provider.get_message()
             
-            # Send it
-            self.typer.send(msg)
+            # Send it (awaitable now)
+            await self.typer.send(msg)
         except Exception as e:
             logger.error(f"Error executing macro: {e}", exc_info=True)
             SoundManager.play_error()
 
-    def _next_mode(self) -> None:
+    def _trigger_chat_callback(self) -> None:
+        """Callback for the keyboard listener (runs in thread). Publishes event."""
+        self.event_bus.publish(Event(EventType.TRIGGER_CHAT))
+
+    def _next_mode_callback(self) -> None:
+        """Callback for the keyboard listener (runs in thread). Publishes event."""
+        self.event_bus.publish(Event(EventType.NEXT_PERSONA))
+
+    def _prev_mode_callback(self) -> None:
+        """Callback for the keyboard listener (runs in thread). Publishes event."""
+        self.event_bus.publish(Event(EventType.PREV_PERSONA))
+
+    def _process_next_mode(self) -> None:
         if isinstance(self.provider, ISwitchableMessageProvider):
             self.provider.next_mode()
 
-    def _prev_mode(self) -> None:
+    def _process_prev_mode(self) -> None:
         if isinstance(self.provider, ISwitchableMessageProvider):
             self.provider.prev_mode()
 
-    def start(self) -> None:
+    async def _consume_events(self) -> None:
         """
-        Starts the keyboard listener loop and registers all hotkeys.
-        Blocks until the user presses ESC or Ctrl+C to exit.
+        Main event loop consumer. Waits for events and dispatches them.
+        """
+        logger.info("Event consumer loop started.")
+        self.is_running = True
+        while self.is_running:
+            try:
+                event = await self.event_bus.get()
+                logger.debug(f"Received event: {event.type}")
+                
+                if event.type == EventType.TRIGGER_CHAT:
+                    await self._process_trigger_chat()
+                elif event.type == EventType.NEXT_PERSONA:
+                    self._process_next_mode()
+                elif event.type == EventType.PREV_PERSONA:
+                    self._process_prev_mode()
+                elif event.type == EventType.SHUTDOWN:
+                    self.is_running = False
+                    break
+            except asyncio.CancelledError:
+                logger.info("Event consumer cancelled.")
+                break
+            except Exception as e:
+                logger.error(f"Error in event loop: {e}", exc_info=True)
+
+    async def start(self) -> None:
+        """
+        Starts the bot, registers hotkeys, and runs the event loop.
         """
         logger.info("Program started.")
         logger.info(f"Using Provider: {self.provider.__class__.__name__}")
@@ -79,20 +120,26 @@ class AutoChatBot:
         
         try:
             # Register trigger hotkey
-            keyboard.add_hotkey(self.trigger_key, self._execute_macro)
+            keyboard.add_hotkey(self.trigger_key, self._trigger_chat_callback)
             
             # Register mode switching hotkeys if provider supports it
             if isinstance(self.provider, ISwitchableMessageProvider):
                 if self.next_mode_key:
-                    keyboard.add_hotkey(self.next_mode_key, self._next_mode)
+                    keyboard.add_hotkey(self.next_mode_key, self._next_mode_callback)
                 if self.prev_mode_key:
-                    keyboard.add_hotkey(self.prev_mode_key, self._prev_mode)
+                    keyboard.add_hotkey(self.prev_mode_key, self._prev_mode_callback)
             
-            # Block until escape
-            keyboard.wait('esc')
-        except KeyboardInterrupt:
-            # This block catches Ctrl+C
-            logger.info("Received KeyboardInterrupt. Shutting down...")
+            # Hook cleanup to 'esc' via keyboard library is tricky with asyncio
+            # Instead, we'll just run until cancelled or exception
+            # We can use a separate task to watch for 'esc' if we want to exit cleanly via key
+            # For now, we rely on KeyboardInterrupt (Ctrl+C) or 'esc' callback publishing shutdown
+            keyboard.add_hotkey('esc', lambda: self.event_bus.publish(Event(EventType.SHUTDOWN)))
+
+            # Run event consumer
+            await self._consume_events()
+            
+        except asyncio.CancelledError:
+            logger.info("Bot task cancelled.")
         finally:
             self.stop()
 

@@ -53,7 +53,9 @@ def get_tts_engine():
         return ElevenLabsTTS(
             api_key=Config.ELEVENLABS_API_KEY,
             voice_id=Config.ELEVENLABS_VOICE_ID,
-            model_id=Config.ELEVENLABS_MODEL_ID
+            model_id=Config.ELEVENLABS_MODEL_ID,
+            stability=Config.ELEVENLABS_STABILITY,
+            similarity_boost=Config.ELEVENLABS_SIMILARITY_BOOST
         )
     else:
         return Pyttsx3TTS()

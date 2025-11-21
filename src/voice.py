@@ -82,10 +82,12 @@ class ElevenLabsTTS(ITextToSpeech):
     """
     Cloud Text-to-Speech implementation using ElevenLabs API.
     """
-    def __init__(self, api_key: str, voice_id: str, model_id: str = "eleven_monolingual_v1") -> None:
+    def __init__(self, api_key: str, voice_id: str, model_id: str = "eleven_monolingual_v1", stability: float = 0.5, similarity_boost: float = 0.75) -> None:
         self.api_key = api_key
         self.voice_id = voice_id
         self.model_id = model_id
+        self.stability = stability
+        self.similarity_boost = similarity_boost
         
         try:
             from elevenlabs.client import ElevenLabs
@@ -135,10 +137,19 @@ class ElevenLabsTTS(ITextToSpeech):
         try:
             # Generate returns an iterator of bytes (stream)
             # Updated for ElevenLabs SDK 1.0+ where generate is under text_to_speech.convert
+            
+            # Construct voice settings if library supports it via dict or object
+            # Check elevenlabs structure for VoiceSettings
+            from elevenlabs import VoiceSettings
+            
             audio_stream = self.client.text_to_speech.convert(
                 text=text,
                 voice_id=self.voice_id,
-                model_id=self.model_id
+                model_id=self.model_id,
+                voice_settings=VoiceSettings(
+                    stability=self.stability,
+                    similarity_boost=self.similarity_boost
+                )
             )
             
             # Write the stream to file

@@ -83,7 +83,7 @@ You can choose between the built-in offline TTS (pyttsx3) or high-quality AI voi
 -   **F5**: Generate and speak a message.
 -   **F8**: Next Persona.
 -   **F7**: Previous Persona.
--   **ESC**: Quit.
+-   **Ctrl+C**: Quit.
 
 ## Customization
 Edit `prompts.json` to add your own personas or change the style of existing ones.

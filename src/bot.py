@@ -165,7 +165,7 @@ class AutoChatBot:
         if isinstance(self.provider, ISwitchableMessageProvider):
             logger.info(f"Mode Switching Enabled: Next='{self.next_mode_key}', Prev='{self.prev_mode_key}'")
         
-        logger.info("Press 'esc' or Ctrl+C to quit.")
+        logger.info("Press Ctrl+C to quit.")
         
         try:
             # Register trigger hotkeys
@@ -179,8 +179,8 @@ class AutoChatBot:
                 if self.prev_mode_key:
                     keyboard.add_hotkey(self.prev_mode_key, self._prev_mode_callback)
             
-            # Hook cleanup to 'esc'
-            keyboard.add_hotkey('esc', lambda: self.event_bus.publish(Event(EventType.SHUTDOWN)))
+            # Hook cleanup to 'esc' -> REMOVED per user request
+            # keyboard.add_hotkey('esc', lambda: self.event_bus.publish(Event(EventType.SHUTDOWN)))
 
             # Run event consumer
             await self._consume_events()

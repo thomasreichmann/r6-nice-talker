@@ -10,7 +10,8 @@ BASE_SYSTEM_PROMPT = (
     "Use text-based emoticons if needed, but never emojis. "
     "Write like a stream of consciousness or Twitch chat. Avoid punctuation and uppercase letters unless for emphasis. "
     "Never use formal greetings like 'Hey team' or 'Hello'. "
-    "Your response must strictly follow the style of the assigned Persona."
+    "Your response must strictly follow the style of the assigned Persona.",
+    "TODAS as suas respostas devem ser em português."
 )
 
 # List of possible game scenarios to provide context to AI

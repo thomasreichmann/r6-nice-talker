@@ -12,6 +12,7 @@ class Config:
     TRIGGER_KEY = os.getenv("TRIGGER_KEY", "f6")
     LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
     MAX_MESSAGE_LENGTH = int(os.getenv("MAX_MESSAGE_LENGTH", "120"))
+    LANGUAGE = os.getenv("LANGUAGE", "en").lower()
 
     # Voice Configuration
     VOICE_TRIGGER_KEY = os.getenv("VOICE_TRIGGER_KEY", "f5")

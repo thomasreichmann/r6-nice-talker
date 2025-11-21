@@ -2,7 +2,7 @@ from src.interfaces import IMessageProvider, ISwitchableMessageProvider
 from src.config import Config
 from src.utils import measure_latency, remove_emojis
 from src.context import get_random_context
-from src.constants import BASE_SYSTEM_PROMPT
+from src.constants import SYSTEM_PROMPTS
 from src.sounds import SoundManager
 import random
 import json
@@ -59,6 +59,10 @@ class ChatGPTProvider(ISwitchableMessageProvider):
         self.prompts = self._load_prompts(prompts_file)
         self.current_index = 0
         
+        # Resolve language-specific system prompt
+        # Fallback to English if language key is missing
+        self.base_system_prompt = SYSTEM_PROMPTS.get(Config.LANGUAGE, SYSTEM_PROMPTS["en"])
+        
         # Store the last 5 generated messages to maintain context/style consistency
         self.history = deque(maxlen=5)
         
@@ -107,7 +111,7 @@ class ChatGPTProvider(ISwitchableMessageProvider):
         logger.info(f"Generating message with persona: {current_persona['name']} | Context: {context_scenario}")
         
         # Construct a dynamic prompt using the centralized base prompt
-        final_system_prompt = f"{BASE_SYSTEM_PROMPT}\n\nPersona/Style: {style_prompt}"
+        final_system_prompt = f"{self.base_system_prompt}\n\nPersona/Style: {style_prompt}"
         user_prompt = f"Current Match Situation: {context_scenario}\nWrite a chat message reacting to this situation."
         
         # Build message list with history

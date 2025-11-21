@@ -22,7 +22,14 @@ A python script that uses AI to generate and type "wholesome" (or edgy, or salty
     -   Add your `OPENAI_API_KEY`.
     -   (Optional) Customize `TRIGGER_KEY` (default F6) or `NEXT_PROMPT_KEY` (default F8).
 
-3.  **Run**:
+3.  **Language Support**:
+    -   By default, the bot speaks English (`en`).
+    -   To change to Portuguese, update `.env`:
+        ```env
+        LANGUAGE=pt-br
+        ```
+
+4.  **Run**:
     -   **Must run as Administrator** to interact with the game window.
     ```bash
     python main.py
@@ -74,9 +81,10 @@ You can choose between the built-in offline TTS (pyttsx3) or high-quality AI voi
   ```
   - `ELEVENLABS_VOICE_ID` can be found in the VoiceLab on their website.
 
-4.  **Usage**:
-    -   Press `F5` (default) to generate and speak a message into the voice chat.
-    -   **Note**: The bot plays the audio into the virtual microphone. You may need to hold your Push-to-Talk key in-game while the bot is speaking (unless you use Open Mic or bind the bot to also hold the PTT key - *future feature*).
+### Usage (Voice)
+
+1.  Press `F5` (default) to generate and speak a message into the voice chat.
+2.  **Note**: The bot plays the audio into the virtual microphone. You may need to hold your Push-to-Talk key in-game while the bot is speaking.
 
 ## Usage
 -   **F6**: Generate and type a message.

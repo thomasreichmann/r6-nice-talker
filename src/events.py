@@ -13,6 +13,7 @@ logger = logging.getLogger(__name__)
 class EventType(Enum):
     """Enumeration of all possible event types in the application."""
     TRIGGER_CHAT = auto()
+    TRIGGER_VOICE = auto()
     NEXT_PERSONA = auto()
     PREV_PERSONA = auto()
     SHUTDOWN = auto()

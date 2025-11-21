@@ -13,6 +13,17 @@ class Config:
     LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
     MAX_MESSAGE_LENGTH = int(os.getenv("MAX_MESSAGE_LENGTH", "120"))
 
+    # Voice Configuration
+    VOICE_TRIGGER_KEY = os.getenv("VOICE_TRIGGER_KEY", "f5")
+    AUDIO_OUTPUT_DEVICE_NAME = os.getenv("AUDIO_OUTPUT_DEVICE_NAME")  # None = Default
+    AUDIO_OUTPUT_DEVICE_INDEX = os.getenv("AUDIO_OUTPUT_DEVICE_INDEX")
+    if AUDIO_OUTPUT_DEVICE_INDEX:
+        AUDIO_OUTPUT_DEVICE_INDEX = int(AUDIO_OUTPUT_DEVICE_INDEX)
+    
+    # Audio Monitoring (Hear what the bot says)
+    AUDIO_MONITORING = os.getenv("AUDIO_MONITORING", "true").lower() == "true"
+
+
     # ChatGPT / AI Configuration
     OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
     OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-3.5-turbo")

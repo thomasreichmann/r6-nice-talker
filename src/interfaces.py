@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from typing import Any
 
 class IMessageProvider(ABC):
     """
@@ -36,5 +37,36 @@ class IChatTyper(ABC):
     async def send(self, message: str) -> None:
         """
         Handles the logic of opening chat, typing, and pressing enter.
+        """
+        pass
+
+class ITextToSpeech(ABC):
+    """
+    Interface for converting text to speech audio.
+    """
+    @abstractmethod
+    async def synthesize(self, text: str) -> Any:
+        """
+        Converts text to speech.
+        
+        Args:
+            text (str): The text to convert.
+            
+        Returns:
+            Any: The audio data or path to the audio file.
+        """
+        pass
+
+class IAudioPlayer(ABC):
+    """
+    Interface for playing audio data.
+    """
+    @abstractmethod
+    async def play(self, source: Any) -> None:
+        """
+        Plays the provided audio source.
+        
+        Args:
+            source (Any): The audio data or path to play.
         """
         pass

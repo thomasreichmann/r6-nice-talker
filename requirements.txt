@@ -2,3 +2,7 @@ keyboard
 pydirectinput-rgx
 python-dotenv
 openai
+pyttsx3
+sounddevice
+soundfile
+numpy

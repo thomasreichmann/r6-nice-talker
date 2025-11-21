@@ -4,7 +4,7 @@ Main bot application module that controls hotkey bindings and message generation
 import keyboard
 import logging
 import asyncio
-from src.interfaces import IMessageProvider, IChatTyper, ISwitchableMessageProvider
+from src.interfaces import IMessageProvider, IChatTyper, ISwitchableMessageProvider, ITextToSpeech, IAudioPlayer
 from src.sounds import SoundManager
 from src.events import EventBus, Event, EventType
 
@@ -13,30 +13,39 @@ logger = logging.getLogger(__name__)
 
 class AutoChatBot:
     """
-    The main application controller that orchestrates message generation and typing.
+    The main application controller that orchestrates message generation and typing/speaking.
     Binds hotkeys to trigger message generation and persona switching.
     
     Args:
-        trigger_key (str): The hotkey to trigger message generation.
+        trigger_key (str): The hotkey to trigger message generation (typing).
+        voice_trigger_key (str): The hotkey to trigger message generation (voice).
         message_provider (IMessageProvider): The provider that generates messages.
         chat_typer (IChatTyper): The typer that sends messages to the game.
         event_bus (EventBus): The event bus for async event communication.
+        tts_engine (ITextToSpeech, optional): The TTS engine for voice generation.
+        audio_player (IAudioPlayer, optional): The player for voice playback.
         next_mode_key (str, optional): Hotkey to switch to next persona.
         prev_mode_key (str, optional): Hotkey to switch to previous persona.
     """
     def __init__(
         self, 
         trigger_key: str, 
+        voice_trigger_key: str,
         message_provider: IMessageProvider, 
         chat_typer: IChatTyper,
         event_bus: EventBus,
+        tts_engine: ITextToSpeech = None,
+        audio_player: IAudioPlayer = None,
         next_mode_key: str = None,
         prev_mode_key: str = None
     ) -> None:
         self.trigger_key = trigger_key
+        self.voice_trigger_key = voice_trigger_key
         self.provider = message_provider
         self.typer = chat_typer
         self.event_bus = event_bus
+        self.tts_engine = tts_engine
+        self.audio_player = audio_player
         self.next_mode_key = next_mode_key
         self.prev_mode_key = prev_mode_key
         self.is_running = False
@@ -55,12 +64,46 @@ class AutoChatBot:
             # Send it (awaitable now)
             await self.typer.send(msg)
         except Exception as e:
-            logger.error(f"Error executing macro: {e}", exc_info=True)
+            logger.error(f"Error executing chat macro: {e}", exc_info=True)
+            SoundManager.play_error()
+
+    async def _process_trigger_voice(self) -> None:
+        """
+        Handles the TRIGGER_VOICE event: generates a message, converts to audio, and plays it.
+        """
+        if not self.tts_engine or not self.audio_player:
+            logger.warning("Voice trigger received but TTS/Audio components are missing.")
+            SoundManager.play_error()
+            return
+
+        try:
+            # Audio Feedback: Operation Started
+            SoundManager.play_success()
+            
+            # Get the content
+            msg = await self.provider.get_message()
+            
+            # Synthesize
+            audio_path = await self.tts_engine.synthesize(msg)
+            if not audio_path:
+                logger.error("TTS failed to generate audio.")
+                SoundManager.play_error()
+                return
+
+            # Play
+            await self.audio_player.play(audio_path)
+            
+        except Exception as e:
+            logger.error(f"Error executing voice macro: {e}", exc_info=True)
             SoundManager.play_error()
 
     def _trigger_chat_callback(self) -> None:
         """Callback for the keyboard listener (runs in thread). Publishes event."""
         self.event_bus.publish(Event(EventType.TRIGGER_CHAT))
+
+    def _trigger_voice_callback(self) -> None:
+        """Callback for the keyboard listener (runs in thread). Publishes event."""
+        self.event_bus.publish(Event(EventType.TRIGGER_VOICE))
 
     def _next_mode_callback(self) -> None:
         """Callback for the keyboard listener (runs in thread). Publishes event."""
@@ -91,6 +134,8 @@ class AutoChatBot:
                 
                 if event.type == EventType.TRIGGER_CHAT:
                     await self._process_trigger_chat()
+                elif event.type == EventType.TRIGGER_VOICE:
+                    await self._process_trigger_voice()
                 elif event.type == EventType.NEXT_PERSONA:
                     self._process_next_mode()
                 elif event.type == EventType.PREV_PERSONA:
@@ -111,7 +156,11 @@ class AutoChatBot:
         logger.info("Program started.")
         logger.info(f"Using Provider: {self.provider.__class__.__name__}")
         logger.info(f"Using Typer: {self.typer.__class__.__name__}")
-        logger.info(f"Press '{self.trigger_key}' to send message.")
+        if self.tts_engine:
+            logger.info(f"Using TTS: {self.tts_engine.__class__.__name__}")
+        
+        logger.info(f"Press '{self.trigger_key}' to type message.")
+        logger.info(f"Press '{self.voice_trigger_key}' to speak message.")
         
         if isinstance(self.provider, ISwitchableMessageProvider):
             logger.info(f"Mode Switching Enabled: Next='{self.next_mode_key}', Prev='{self.prev_mode_key}'")
@@ -119,8 +168,9 @@ class AutoChatBot:
         logger.info("Press 'esc' or Ctrl+C to quit.")
         
         try:
-            # Register trigger hotkey
+            # Register trigger hotkeys
             keyboard.add_hotkey(self.trigger_key, self._trigger_chat_callback)
+            keyboard.add_hotkey(self.voice_trigger_key, self._trigger_voice_callback)
             
             # Register mode switching hotkeys if provider supports it
             if isinstance(self.provider, ISwitchableMessageProvider):
@@ -129,10 +179,7 @@ class AutoChatBot:
                 if self.prev_mode_key:
                     keyboard.add_hotkey(self.prev_mode_key, self._prev_mode_callback)
             
-            # Hook cleanup to 'esc' via keyboard library is tricky with asyncio
-            # Instead, we'll just run until cancelled or exception
-            # We can use a separate task to watch for 'esc' if we want to exit cleanly via key
-            # For now, we rely on KeyboardInterrupt (Ctrl+C) or 'esc' callback publishing shutdown
+            # Hook cleanup to 'esc'
             keyboard.add_hotkey('esc', lambda: self.event_bus.publish(Event(EventType.SHUTDOWN)))
 
             # Run event consumer

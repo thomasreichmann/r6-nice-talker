@@ -23,6 +23,15 @@ class Config:
     # Audio Monitoring (Hear what the bot says)
     AUDIO_MONITORING = os.getenv("AUDIO_MONITORING", "true").lower() == "true"
 
+    # TTS Configuration
+    # Options: pyttsx3, elevenlabs
+    TTS_PROVIDER = os.getenv("TTS_PROVIDER", "pyttsx3").lower()
+    
+    # ElevenLabs
+    ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY", "")
+    ELEVENLABS_VOICE_ID = os.getenv("ELEVENLABS_VOICE_ID", "21m00Tcm4TlvDq8ikWAM") # Default to Rachel
+    ELEVENLABS_MODEL_ID = os.getenv("ELEVENLABS_MODEL", "eleven_monolingual_v1")
+
 
     # ChatGPT / AI Configuration
     OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")

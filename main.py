@@ -8,9 +8,9 @@ import asyncio
 from src.config import Config
 from src.bot import AutoChatBot
 from src.input_manager import patch_pydirectinput
-from src.factory import setup_logging, get_message_provider, get_chat_typer
+from src.factory import setup_logging, get_message_provider, get_chat_typer, get_tts_engine
 from src.events import EventBus
-from src.voice import Pyttsx3TTS, SoundDevicePlayer
+from src.voice import SoundDevicePlayer
 
 
 async def main() -> None:
@@ -31,12 +31,14 @@ async def main() -> None:
         event_bus = EventBus()
         
         # Voice dependencies
-        tts_engine = Pyttsx3TTS()
+        tts_engine = get_tts_engine()
         audio_player = SoundDevicePlayer(
             device_name=Config.AUDIO_OUTPUT_DEVICE_NAME,
             device_index=Config.AUDIO_OUTPUT_DEVICE_INDEX,
             monitor=Config.AUDIO_MONITORING
         )
+        
+        logger.info(f"TTS Engine: {tts_engine.__class__.__name__}")
         
         app = AutoChatBot(
             trigger_key=Config.TRIGGER_KEY,

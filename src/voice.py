@@ -78,6 +78,81 @@ class Pyttsx3TTS(ITextToSpeech):
             logger.error(f"pyttsx3 generation error: {e}")
 
 
+class ElevenLabsTTS(ITextToSpeech):
+    """
+    Cloud Text-to-Speech implementation using ElevenLabs API.
+    """
+    def __init__(self, api_key: str, voice_id: str, model_id: str = "eleven_monolingual_v1") -> None:
+        self.api_key = api_key
+        self.voice_id = voice_id
+        self.model_id = model_id
+        
+        try:
+            from elevenlabs.client import ElevenLabs
+            self.client = ElevenLabs(api_key=self.api_key)
+        except ImportError:
+            logger.error("elevenlabs library not found. Please install it: pip install elevenlabs")
+            self.client = None
+        except Exception as e:
+            logger.error(f"Failed to initialize ElevenLabs client: {e}")
+            self.client = None
+
+    async def synthesize(self, text: str) -> str:
+        """
+        Synthesizes text to a temporary audio file using ElevenLabs.
+        """
+        if not self.client:
+            logger.error("ElevenLabs client not initialized. Check logs for setup errors.")
+            return ""
+            
+        if not text or not text.strip():
+            return ""
+
+        # Create a temporary file path
+        # ElevenLabs returns MP3 by default usually, but we can stream chunks.
+        # We'll stick to .mp3 suffix for the temp file to be safe for playback libraries.
+        temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".mp3")
+        temp_path = temp_file.name
+        temp_file.close()
+
+        try:
+            loop = asyncio.get_running_loop()
+            await loop.run_in_executor(None, self._generate_file, text, temp_path)
+            return temp_path
+        except Exception as e:
+            logger.error(f"ElevenLabs synthesis error: {e}")
+            if os.path.exists(temp_path):
+                try:
+                    os.remove(temp_path)
+                except:
+                    pass
+            return ""
+
+    def _generate_file(self, text: str, path: str) -> None:
+        """
+        Blocking helper to call ElevenLabs API and save to file.
+        """
+        try:
+            # Generate returns an iterator of bytes (stream)
+            # Updated for ElevenLabs SDK 1.0+ where generate is under text_to_speech.convert
+            audio_stream = self.client.text_to_speech.convert(
+                text=text,
+                voice_id=self.voice_id,
+                model_id=self.model_id
+            )
+            
+            # Write the stream to file
+            # audio_stream is a generator of bytes
+            with open(path, "wb") as f:
+                for chunk in audio_stream:
+                    if chunk:
+                        f.write(chunk)
+                        
+        except Exception as e:
+            logger.error(f"ElevenLabs API error: {e}")
+            raise e
+
+
 class SoundDevicePlayer(IAudioPlayer):
     """
     Plays audio using the 'sounddevice' library, supporting specific output devices.

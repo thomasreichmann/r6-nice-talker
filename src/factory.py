@@ -3,6 +3,7 @@ import sys
 from src.config import Config
 from src.providers import FixedMessageProvider, RandomMessageProvider, ChatGPTProvider
 from src.typers import R6SiegeTyper, DebugTyper
+from src.voice import Pyttsx3TTS, ElevenLabsTTS
 
 def setup_logging():
     """
@@ -44,3 +45,15 @@ def get_chat_typer():
             typing_interval=Config.TYPING_INTERVAL
         )
 
+def get_tts_engine():
+    """
+    Returns the configured Text-to-Speech engine.
+    """
+    if Config.TTS_PROVIDER == 'elevenlabs':
+        return ElevenLabsTTS(
+            api_key=Config.ELEVENLABS_API_KEY,
+            voice_id=Config.ELEVENLABS_VOICE_ID,
+            model_id=Config.ELEVENLABS_MODEL_ID
+        )
+    else:
+        return Pyttsx3TTS()

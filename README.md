@@ -51,6 +51,29 @@ To play AI-generated voice lines directly into the game's voice chat:
         ```
     -   Alternatively, you can use the device index (`AUDIO_OUTPUT_DEVICE_INDEX`), but names are more reliable.
 
+### Text-to-Speech Configuration
+
+You can choose between the built-in offline TTS (pyttsx3) or high-quality AI voices (ElevenLabs).
+
+**Option 1: Offline (Default)**
+- Uses your system's installed TTS voices.
+- Fast, free, but robotic.
+- Configuration in `.env`:
+  ```env
+  TTS_PROVIDER=pyttsx3
+  ```
+
+**Option 2: ElevenLabs (High Quality)**
+- Uses AI generated voices.
+- Requires an API key.
+- Configuration in `.env`:
+  ```env
+  TTS_PROVIDER=elevenlabs
+  ELEVENLABS_API_KEY=your_api_key
+  ELEVENLABS_VOICE_ID=21m00Tcm4TlvDq8ikWAM
+  ```
+  - `ELEVENLABS_VOICE_ID` can be found in the VoiceLab on their website.
+
 4.  **Usage**:
     -   Press `F5` (default) to generate and speak a message into the voice chat.
     -   **Note**: The bot plays the audio into the virtual microphone. You may need to hold your Push-to-Talk key in-game while the bot is speaking (unless you use Open Mic or bind the bot to also hold the PTT key - *future feature*).

@@ -4,7 +4,7 @@ Main bot application module that controls hotkey bindings and message generation
 import keyboard
 import logging
 import asyncio
-from src.interfaces import IMessageProvider, IChatTyper, ISwitchableMessageProvider, ITextToSpeech, IAudioPlayer
+from src.interfaces import IMessageProvider, IChatTyper, ISwitchableMessageProvider, ITextToSpeech, IAudioPlayer, IContextObserver
 from src.sounds import SoundManager
 from src.events import EventBus, Event, EventType
 
@@ -22,6 +22,7 @@ class AutoChatBot:
         message_provider (IMessageProvider): The provider that generates messages.
         chat_typer (IChatTyper): The typer that sends messages to the game.
         event_bus (EventBus): The event bus for async event communication.
+        context_observer (IContextObserver, optional): Generic provider for game context (Vision, Audio, etc).
         tts_engine (ITextToSpeech, optional): The TTS engine for voice generation.
         audio_player (IAudioPlayer, optional): The player for voice playback.
         next_mode_key (str, optional): Hotkey to switch to next persona.
@@ -34,6 +35,7 @@ class AutoChatBot:
         message_provider: IMessageProvider, 
         chat_typer: IChatTyper,
         event_bus: EventBus,
+        context_observer: IContextObserver = None,
         tts_engine: ITextToSpeech = None,
         audio_player: IAudioPlayer = None,
         next_mode_key: str = None,
@@ -44,11 +46,30 @@ class AutoChatBot:
         self.provider = message_provider
         self.typer = chat_typer
         self.event_bus = event_bus
+        self.context_observer = context_observer
         self.tts_engine = tts_engine
         self.audio_player = audio_player
         self.next_mode_key = next_mode_key
         self.prev_mode_key = prev_mode_key
         self.is_running = False
+
+    async def _get_context_override(self) -> str:
+        """Helper to safely fetch context from the observer in a thread."""
+        if not self.context_observer:
+            return None
+            
+        # Running in thread to avoid blocking event loop
+        try:
+            context = await asyncio.to_thread(self.context_observer.get_context)
+            if context:
+                logger.info(f"Context Observer Detected: {context}")
+                return context
+            else:
+                # Silent fallback
+                return None
+        except Exception as e:
+            logger.error(f"Error fetching context: {e}")
+            return None
 
     async def _process_trigger_chat(self) -> None:
         """
@@ -58,8 +79,11 @@ class AutoChatBot:
             # Audio Feedback: Operation Started
             SoundManager.play_success()
             
+            # Get Context
+            context_override = await self._get_context_override()
+            
             # Get the content (awaitable now)
-            msg = await self.provider.get_message()
+            msg = await self.provider.get_message(mode="text", context_override=context_override)
             
             # Send it (awaitable now)
             await self.typer.send(msg)
@@ -79,9 +103,12 @@ class AutoChatBot:
         try:
             # Audio Feedback: Operation Started
             SoundManager.play_success()
+
+            # Get Context
+            context_override = await self._get_context_override()
             
             # Get the content
-            msg = await self.provider.get_message()
+            msg = await self.provider.get_message(mode="voice", context_override=context_override)
             
             # Synthesize
             audio_path = await self.tts_engine.synthesize(msg)
@@ -156,6 +183,8 @@ class AutoChatBot:
         logger.info("Program started.")
         logger.info(f"Using Provider: {self.provider.__class__.__name__}")
         logger.info(f"Using Typer: {self.typer.__class__.__name__}")
+        if self.context_observer:
+             logger.info(f"Using Observer: {self.context_observer.__class__.__name__}")
         if self.tts_engine:
             logger.info(f"Using TTS: {self.tts_engine.__class__.__name__}")
         

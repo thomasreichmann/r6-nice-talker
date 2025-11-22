@@ -4,6 +4,7 @@ from src.config import Config
 from src.providers import FixedMessageProvider, RandomMessageProvider, ChatGPTProvider
 from src.typers import R6SiegeTyper, DebugTyper
 from src.voice import Pyttsx3TTS, ElevenLabsTTS
+from src.vision import TesseractProvider, EasyOCRProvider
 
 def setup_logging():
     """
@@ -59,3 +60,15 @@ def get_tts_engine():
         )
     else:
         return Pyttsx3TTS()
+
+def get_context_observer():
+    """
+    Returns the configured Context Observer (previously just Vision).
+    """
+    engine = Config.VISION_ENGINE
+    
+    if engine == 'tesseract':
+        return TesseractProvider()
+    else:
+        # Default to EasyOCR
+        return EasyOCRProvider()

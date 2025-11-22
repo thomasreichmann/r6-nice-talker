@@ -1,8 +1,12 @@
 import os
+import json
+import logging
 from dotenv import load_dotenv
 
 # Load environment variables from .env file if it exists
 load_dotenv()
+
+logger = logging.getLogger(__name__)
 
 class Config:
     """
@@ -38,8 +42,8 @@ class Config:
 
     # ChatGPT / AI Configuration
     OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
-    OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-3.5-turbo")
-    # Swapped logic: F8 is Next, F7 is Prev (as requested)
+    OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+
     NEXT_PROMPT_KEY = os.getenv("NEXT_PROMPT_KEY", "f8")
     PREV_PROMPT_KEY = os.getenv("PREV_PROMPT_KEY", "f7")
 
@@ -52,3 +56,27 @@ class Config:
     TYPER_TYPE = os.getenv("TYPER_TYPE", "r6").lower()
     OPEN_CHAT_DELAY = float(os.getenv("OPEN_CHAT_DELAY", "0.2"))
     TYPING_INTERVAL = float(os.getenv("TYPING_INTERVAL", "0.01"))
+
+    # Vision / Context Awareness
+    # Options: easyocr, tesseract
+    VISION_ENGINE = os.getenv("VISION_ENGINE", "easyocr").lower()
+    TESSERACT_PATH = os.getenv("TESSERACT_PATH", r"C:\Program Files\Tesseract-OCR\tesseract.exe")
+    
+    # Regions of Interest (ROIs)
+    # Loaded from rois.json
+    VISION_ROIS = {}
+    
+    @classmethod
+    def load_rois(cls):
+        try:
+            with open('rois.json', 'r') as f:
+                cls.VISION_ROIS = json.load(f)
+        except FileNotFoundError:
+            logger.warning("rois.json not found. Vision will be disabled.")
+            cls.VISION_ROIS = {}
+        except json.JSONDecodeError:
+             logger.error("rois.json is invalid JSON.")
+             cls.VISION_ROIS = {}
+
+# Load ROIs at startup
+Config.load_rois()

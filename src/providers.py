@@ -2,7 +2,7 @@ from src.interfaces import IMessageProvider, ISwitchableMessageProvider
 from src.config import Config
 from src.utils import measure_latency, remove_emojis
 from src.context import get_random_context
-from src.constants import SYSTEM_PROMPTS
+from src.constants import USER_PROMPT_TEMPLATES, get_system_prompt
 from src.sounds import SoundManager
 import random
 import json
@@ -23,7 +23,7 @@ class FixedMessageProvider(IMessageProvider):
     def __init__(self, message: str) -> None:
         self.message = message
 
-    async def get_message(self) -> str:
+    async def get_message(self, mode: str = "text", context_override: str = None) -> str:
         return self.message
 
 
@@ -38,7 +38,7 @@ class RandomMessageProvider(IMessageProvider):
     def __init__(self, messages: list[str]) -> None:
         self.messages = messages
 
-    async def get_message(self) -> str:
+    async def get_message(self, mode: str = "text", context_override: str = None) -> str:
         if not self.messages:
             return ""
         return random.choice(self.messages)
@@ -59,9 +59,8 @@ class ChatGPTProvider(ISwitchableMessageProvider):
         self.prompts = self._load_prompts(prompts_file)
         self.current_index = 0
         
-        # Resolve language-specific system prompt
-        # Fallback to English if language key is missing
-        self.base_system_prompt = SYSTEM_PROMPTS.get(Config.LANGUAGE, SYSTEM_PROMPTS["en"])
+        # User templates are static, system prompts are dynamic now
+        self.user_prompt_template = USER_PROMPT_TEMPLATES.get(Config.LANGUAGE, USER_PROMPT_TEMPLATES["en"])
         
         # Store the last 5 generated messages to maintain context/style consistency
         self.history = deque(maxlen=5)
@@ -70,9 +69,9 @@ class ChatGPTProvider(ISwitchableMessageProvider):
             # Fallback if file is empty or missing
             self.prompts = [{"name": "Default", "prompt": "Style: Helpful teammate."}]
         else:
-             # Try to find "Reputation Farmer" and set it as default
+             # Try to find "Toxic" and set it as default
              for i, p in enumerate(self.prompts):
-                 if p["name"] == "Reputation Farmer":
+                 if p["name"] == "Toxic":
                      self.current_index = i
                      break
             
@@ -80,7 +79,7 @@ class ChatGPTProvider(ISwitchableMessageProvider):
         logger.info(f"Current Persona: {self.get_current_mode_name()}")
     def _load_prompts(self, filepath: str) -> list[dict]:
         """
-        Loads persona definitions from a JSON file.
+        Loads persona definitions from a JSON file and resolves the prompt for the current language.
         
         Args:
             filepath (str): Path to the prompts JSON file.
@@ -89,30 +88,83 @@ class ChatGPTProvider(ISwitchableMessageProvider):
             list[dict]: List of persona dictionaries with 'name' and 'prompt' keys.
         """
         try:
-            with open(filepath, 'r') as f:
+            with open(filepath, 'r', encoding='utf-8') as f:
                 data = json.load(f)
-                return data
+                
+                if not isinstance(data, list):
+                    logger.error("prompts.json must be a list of personas.")
+                    return []
+                
+                language = Config.LANGUAGE
+                resolved_personas = []
+                
+                for persona in data:
+                    # Handle legacy format (where 'prompt' is a string)
+                    if isinstance(persona.get('prompts'), str) or 'prompt' in persona:
+                        # If using old key 'prompt' or simple string, treat as English default
+                        raw_prompt = persona.get('prompt', persona.get('prompts', ''))
+                        if language == 'en':
+                             resolved_personas.append({
+                                 "name": persona["name"],
+                                 "prompt": raw_prompt
+                             })
+                        continue
+
+                    # Handle new format (where 'prompts' is a dict)
+                    prompts_dict = persona.get('prompts', {})
+                    if isinstance(prompts_dict, dict):
+                        # Get prompt for config language, fallback to English
+                        prompt_text = prompts_dict.get(language)
+                        if not prompt_text:
+                             prompt_text = prompts_dict.get('en', "")
+                             
+                        if prompt_text:
+                            resolved_personas.append({
+                                "name": persona["name"],
+                                "prompt": prompt_text
+                            })
+                
+                return resolved_personas
+                
         except Exception as e:
             logger.error(f"Failed to load prompts from {filepath}: {e}")
             return []
 
     @measure_latency(description="ChatGPT Generation")
-    async def get_message(self) -> str:
+    async def get_message(self, mode: str = "text", context_override: str = None) -> str:
         """
         Generates a chat message using the current persona and a random game context.
+        
+        Args:
+            mode (str): 'text' for short chat messages, 'voice' for spoken lines.
+            context_override (str): Optional specific context to use instead of random.
         
         Returns:
             str: Generated chat message suitable for in-game use.
         """
         current_persona = self.prompts[self.current_index]
         style_prompt = current_persona["prompt"]
-        context_scenario = get_random_context()
         
-        logger.info(f"Generating message with persona: {current_persona['name']} | Context: {context_scenario}")
+        has_vision = False
+        if context_override:
+            context_scenario = context_override
+            has_vision = True
+        else:
+            context_scenario = get_random_context(Config.LANGUAGE)
         
+        logger.info(f"Generating ({mode}) message with persona: {current_persona['name']} | Context: {context_scenario}")
+        
+        # Dynamically construct system prompt
+        base_system_prompt = get_system_prompt(Config.LANGUAGE, mode, has_vision=has_vision)
+        
+        # Select user prompt template
+        lang_templates = USER_PROMPT_TEMPLATES.get(Config.LANGUAGE, USER_PROMPT_TEMPLATES["en"])
+        user_prompt_template = lang_templates.get(mode, lang_templates.get("text"))
+
         # Construct a dynamic prompt using the centralized base prompt
-        final_system_prompt = f"{self.base_system_prompt}\n\nPersona/Style: {style_prompt}"
-        user_prompt = f"Current Match Situation: {context_scenario}\nWrite a chat message reacting to this situation."
+        final_system_prompt = f"{base_system_prompt}\n\nPersona/Style: {style_prompt}"
+        # Formatter template with the scenario
+        user_prompt = user_prompt_template.format(scenario=context_scenario)
         
         # Build message list with history
         messages = [{"role": "system", "content": final_system_prompt}]
@@ -125,10 +177,13 @@ class ChatGPTProvider(ISwitchableMessageProvider):
         messages.append({"role": "user", "content": user_prompt})
         
         try:
+            # Adjust max_tokens for voice to allow longer responses
+            max_tokens = 90 if mode == "text" else 130
+            
             response = await self.client.chat.completions.create(
                 model=self.model,
                 messages=messages,
-                max_tokens=60, # Keep it short for chat limits
+                max_tokens=max_tokens, 
                 temperature=1.0, # High temperature for creativity
                 frequency_penalty=0.6 # Stronger penalty to prevent repetition
             )

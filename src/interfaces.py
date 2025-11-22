@@ -6,8 +6,14 @@ class IMessageProvider(ABC):
     Interface for providing messages to be sent.
     """
     @abstractmethod
-    async def get_message(self) -> str:
-        """Returns the next message to be sent."""
+    async def get_message(self, mode: str = "text", context_override: str = None) -> str:
+        """
+        Returns the next message to be sent.
+        
+        Args:
+            mode (str): The intended use of the message ('text' or 'voice').
+            context_override (str): Optional override for the game context.
+        """
         pass
 
 class ISwitchableMessageProvider(IMessageProvider):
@@ -68,5 +74,18 @@ class IAudioPlayer(ABC):
         
         Args:
             source (Any): The audio data or path to play.
+        """
+        pass
+
+class IContextObserver(ABC):
+    """
+    Interface for any component that can observe the game state and provide context.
+    This could be Vision (OCR), Audio Listeners, Log Readers, etc.
+    """
+    @abstractmethod
+    def get_context(self) -> str:
+        """
+        Returns a natural language description of the current game state.
+        Returns empty string if nothing significant is detected.
         """
         pass

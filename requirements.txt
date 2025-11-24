@@ -12,3 +12,6 @@ easyocr
 mss
 opencv-python
 pillow
+watchdog
+dearpygui
+colorlog

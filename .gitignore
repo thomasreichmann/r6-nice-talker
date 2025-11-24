@@ -28,6 +28,22 @@ ENV/
 # Environment Variables
 .env
 
+# Development cache
+.dev_cache/
+
+# Analytics database
+.analytics.db
+.analytics.db-journal
+
+# Bot logs
+bot.log
+bot.log.*
+
+# Testing outputs
+vision_output/
+tts_output_*.wav
+tts_output_*.mp3
+
 # IDEs
 .vscode/
 .idea/

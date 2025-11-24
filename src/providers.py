@@ -4,13 +4,26 @@ from src.utils import measure_latency, remove_emojis
 from src.context import get_random_context
 from src.constants import USER_PROMPT_TEMPLATES, get_system_prompt
 from src.sounds import SoundManager
+from src.cache import get_cache
 import random
 import json
 import logging
+import threading
+import time
 from collections import deque
 from openai import AsyncOpenAI
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
+
+# Optional: watchdog for hot-reload
+try:
+    from watchdog.observers import Observer
+    from watchdog.events import FileSystemEventHandler
+    HAS_WATCHDOG = True
+except ImportError:
+    HAS_WATCHDOG = False
+    logger.debug("watchdog not installed, hot-reload disabled")
 
 class FixedMessageProvider(IMessageProvider):
     """
@@ -43,6 +56,30 @@ class RandomMessageProvider(IMessageProvider):
             return ""
         return random.choice(self.messages)
 
+class PromptsFileWatcher(FileSystemEventHandler):
+    """Watches prompts.json for changes and triggers reload."""
+    
+    def __init__(self, provider, event_bus=None):
+        self.provider = provider
+        self.event_bus = event_bus
+        self.prompts_file = Path(provider.prompts_file).resolve()
+    
+    def on_modified(self, event):
+        if event.is_directory:
+            return
+        
+        # Check if the modified file is our prompts file
+        modified_path = Path(event.src_path).resolve()
+        if modified_path == self.prompts_file:
+            logger.info("prompts.json modified, reloading...")
+            self.provider.reload_prompts()
+            
+            # Emit event if event_bus available
+            if self.event_bus:
+                from src.events import Event, EventType
+                self.event_bus.publish(Event(EventType.PROMPTS_RELOADED))
+
+
 class ChatGPTProvider(ISwitchableMessageProvider):
     """
     Generates messages using OpenAI's ChatGPT API based on selectable personas.
@@ -52,12 +89,16 @@ class ChatGPTProvider(ISwitchableMessageProvider):
         api_key (str): OpenAI API key for authentication.
         model (str): The OpenAI model to use (defaults to gpt-3.5-turbo).
         prompts_file (str): Path to JSON file containing persona definitions.
+        event_bus: Optional EventBus for hot-reload notifications.
     """
-    def __init__(self, api_key: str, model: str = "gpt-3.5-turbo", prompts_file: str = "prompts.json"):
+    def __init__(self, api_key: str, model: str = "gpt-3.5-turbo", prompts_file: str = "prompts.json", event_bus=None):
         self.client = AsyncOpenAI(api_key=api_key)
         self.model = model
+        self.prompts_file = prompts_file
         self.prompts = self._load_prompts(prompts_file)
         self.current_index = 0
+        self.event_bus = event_bus
+        self.file_observer = None
         
         # User templates are static, system prompts are dynamic now
         self.user_prompt_template = USER_PROMPT_TEMPLATES.get(Config.LANGUAGE, USER_PROMPT_TEMPLATES["en"])
@@ -77,6 +118,62 @@ class ChatGPTProvider(ISwitchableMessageProvider):
             
         logger.info(f"ChatGPTProvider initialized with {len(self.prompts)} personas.")
         logger.info(f"Current Persona: {self.get_current_mode_name()}")
+        
+        # Setup hot-reload if enabled
+        if Config.PROMPTS_HOT_RELOAD and HAS_WATCHDOG:
+            self._setup_hot_reload()
+    
+    def _setup_hot_reload(self):
+        """Setup file watcher for prompts.json hot-reload."""
+        try:
+            prompts_path = Path(self.prompts_file).resolve()
+            watch_dir = prompts_path.parent
+            
+            event_handler = PromptsFileWatcher(self, self.event_bus)
+            self.file_observer = Observer()
+            self.file_observer.schedule(event_handler, str(watch_dir), recursive=False)
+            self.file_observer.start()
+            
+            logger.info(f"Hot-reload enabled for {self.prompts_file}")
+        except Exception as e:
+            logger.warning(f"Could not setup hot-reload: {e}")
+    
+    def reload_prompts(self):
+        """Reload prompts from file (called by file watcher)."""
+        try:
+            old_persona_name = self.get_current_mode_name()
+            new_prompts = self._load_prompts(self.prompts_file)
+            
+            if not new_prompts:
+                logger.error("Reload failed: prompts file is empty or invalid")
+                return
+            
+            self.prompts = new_prompts
+            
+            # Try to keep the same persona if it still exists
+            found = False
+            for i, p in enumerate(self.prompts):
+                if p["name"] == old_persona_name:
+                    self.current_index = i
+                    found = True
+                    break
+            
+            if not found:
+                self.current_index = 0
+                logger.warning(f"Previous persona '{old_persona_name}' not found, reset to first")
+            
+            # Clear history on reload
+            self.history.clear()
+            
+            logger.info(f"✓ Prompts reloaded ({len(self.prompts)} personas)")
+            logger.info(f"Current Persona: {self.get_current_mode_name()}")
+            
+            # Play sound feedback
+            SoundManager.play_success()
+            
+        except Exception as e:
+            logger.error(f"Error reloading prompts: {e}")
+            SoundManager.play_error()
     def _load_prompts(self, filepath: str) -> list[dict]:
         """
         Loads persona definitions from a JSON file and resolves the prompt for the current language.
@@ -152,6 +249,25 @@ class ChatGPTProvider(ISwitchableMessageProvider):
         else:
             context_scenario = get_random_context(Config.LANGUAGE)
         
+        # Check cache first
+        cache = get_cache()
+        cached_message = cache.get(
+            persona_name=current_persona["name"],
+            context=context_scenario,
+            mode=mode,
+            language=Config.LANGUAGE
+        )
+        
+        if cached_message:
+            logger.info(f"Using cached message for {current_persona['name']}")
+            return cached_message
+        
+        # DRY-RUN mode: return mock response
+        if Config.DRY_RUN:
+            mock_message = f"[DRY-RUN] Mock message from {current_persona['name']}"
+            logger.info(f"[DRY-RUN] Would call OpenAI with persona={current_persona['name']}, context={context_scenario}, mode={mode}")
+            return mock_message
+        
         logger.info(f"Generating ({mode}) message with persona: {current_persona['name']} | Context: {context_scenario}")
         
         # Dynamically construct system prompt
@@ -180,6 +296,7 @@ class ChatGPTProvider(ISwitchableMessageProvider):
             # Adjust max_tokens for voice to allow longer responses
             max_tokens = 90 if mode == "text" else 130
             
+            start_time = time.time()
             response = await self.client.chat.completions.create(
                 model=self.model,
                 messages=messages,
@@ -187,6 +304,23 @@ class ChatGPTProvider(ISwitchableMessageProvider):
                 temperature=1.0, # High temperature for creativity
                 frequency_penalty=0.6 # Stronger penalty to prevent repetition
             )
+            elapsed_ms = int((time.time() - start_time) * 1000)
+            
+            # Track analytics
+            if hasattr(response, 'usage') and response.usage:
+                try:
+                    from src.analytics import get_analytics
+                    analytics = get_analytics()
+                    analytics.track_api_call(
+                        provider="openai",
+                        model=self.model,
+                        tokens_input=response.usage.prompt_tokens,
+                        tokens_output=response.usage.completion_tokens,
+                        latency_ms=elapsed_ms
+                    )
+                except Exception as e:
+                    logger.debug(f"Analytics tracking failed: {e}")
+            
             content = response.choices[0].message.content.strip()
             
             # Cleanup quotes if the model adds them
@@ -201,6 +335,15 @@ class ChatGPTProvider(ISwitchableMessageProvider):
             
             # Add to history
             self.history.append(content)
+            
+            # Cache the result
+            cache.set(
+                content,
+                persona_name=current_persona["name"],
+                context=context_scenario,
+                mode=mode,
+                language=Config.LANGUAGE
+            )
             
         except Exception as e:
             logger.error(f"OpenAI API Error: {e}")

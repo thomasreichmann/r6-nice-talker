@@ -16,6 +16,7 @@ class EventType(Enum):
     TRIGGER_VOICE = auto()
     NEXT_PERSONA = auto()
     PREV_PERSONA = auto()
+    PROMPTS_RELOADED = auto()
     SHUTDOWN = auto()
 
 

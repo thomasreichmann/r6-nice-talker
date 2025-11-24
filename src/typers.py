@@ -37,6 +37,12 @@ class R6SiegeTyper(IChatTyper):
         Args:
             message (str): The message to send in chat.
         """
+        # DRY-RUN mode: just log
+        if Config.DRY_RUN:
+            logger.info(f"[DRY-RUN] Would type in chat: '{message}'")
+            logger.info(f"[DRY-RUN] Actions: Press 'y' -> Wait {self.open_chat_delay}s -> Type '{message}' -> Press 'enter'")
+            return
+        
         # Validation: Truncate message if too long
         final_message = message
         if len(final_message) > self.max_length:

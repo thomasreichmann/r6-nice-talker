@@ -1,24 +1,11 @@
 import logging
-import sys
 from src.config import Config
 from src.providers import FixedMessageProvider, RandomMessageProvider, ChatGPTProvider
 from src.typers import R6SiegeTyper, DebugTyper
 from src.voice import Pyttsx3TTS, ElevenLabsTTS
 from src.vision import TesseractProvider, EasyOCRProvider
 
-def setup_logging():
-    """
-    Configures the logging format and level.
-    """
-    logging.basicConfig(
-        level=getattr(logging, Config.LOG_LEVEL),
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        handlers=[
-            logging.StreamHandler(sys.stdout)
-        ]
-    )
-
-def get_message_provider():
+def get_message_provider(event_bus=None):
     provider_type = Config.MESSAGE_PROVIDER_TYPE
     
     if provider_type == 'random':
@@ -31,7 +18,8 @@ def get_message_provider():
     elif provider_type == 'chatgpt':
         return ChatGPTProvider(
             api_key=Config.OPENAI_API_KEY,
-            model=Config.OPENAI_MODEL
+            model=Config.OPENAI_MODEL,
+            event_bus=event_bus
         )
     else:
         # Default to fixed

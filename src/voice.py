@@ -37,6 +37,12 @@ class Pyttsx3TTS(ITextToSpeech):
         Returns:
             str: Path to the generated .wav file.
         """
+        # DRY-RUN mode: skip synthesis
+        from src.config import Config
+        if Config.DRY_RUN:
+            logger.info(f"[DRY-RUN] Would synthesize with pyttsx3: '{text}'")
+            return "[DRY-RUN-AUDIO]"
+        
         # Create a temporary file path
         temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".wav")
         temp_path = temp_file.name
@@ -45,7 +51,23 @@ class Pyttsx3TTS(ITextToSpeech):
         try:
             loop = asyncio.get_running_loop()
             # Run the blocking generation in a separate thread
+            import time
+            start_time = time.time()
             await loop.run_in_executor(None, self._generate_file, text, temp_path)
+            elapsed_ms = int((time.time() - start_time) * 1000)
+            
+            # Track analytics
+            try:
+                from src.analytics import get_analytics
+                analytics = get_analytics()
+                analytics.track_tts(
+                    provider="pyttsx3",
+                    char_count=len(text),
+                    latency_ms=elapsed_ms
+                )
+            except Exception as e:
+                logger.debug(f"Analytics tracking failed: {e}")
+            
             return temp_path
         except Exception as e:
             logger.error(f"Error during synthesis: {e}")
@@ -103,6 +125,12 @@ class ElevenLabsTTS(ITextToSpeech):
         """
         Synthesizes text to a temporary audio file using ElevenLabs.
         """
+        # DRY-RUN mode: skip synthesis
+        from src.config import Config
+        if Config.DRY_RUN:
+            logger.info(f"[DRY-RUN] Would synthesize with ElevenLabs: '{text}' (voice_id={self.voice_id})")
+            return "[DRY-RUN-AUDIO]"
+        
         if not self.client:
             logger.error("ElevenLabs client not initialized. Check logs for setup errors.")
             return ""
@@ -119,7 +147,23 @@ class ElevenLabsTTS(ITextToSpeech):
 
         try:
             loop = asyncio.get_running_loop()
+            import time
+            start_time = time.time()
             await loop.run_in_executor(None, self._generate_file, text, temp_path)
+            elapsed_ms = int((time.time() - start_time) * 1000)
+            
+            # Track analytics
+            try:
+                from src.analytics import get_analytics
+                analytics = get_analytics()
+                analytics.track_tts(
+                    provider="elevenlabs",
+                    char_count=len(text),
+                    latency_ms=elapsed_ms
+                )
+            except Exception as e:
+                logger.debug(f"Analytics tracking failed: {e}")
+            
             return temp_path
         except Exception as e:
             logger.error(f"ElevenLabs synthesis error: {e}")
@@ -240,6 +284,12 @@ class SoundDevicePlayer(IAudioPlayer):
         """
         Plays the audio file at the given path using sounddevice.
         """
+        # DRY-RUN mode: skip playback
+        from src.config import Config
+        if Config.DRY_RUN or source == "[DRY-RUN-AUDIO]":
+            logger.info("[DRY-RUN] Would play audio")
+            return
+        
         if not source or not isinstance(source, str) or not os.path.exists(source):
             logger.warning(f"Invalid audio source: {source}")
             return

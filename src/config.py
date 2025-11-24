@@ -17,6 +17,12 @@ class Config:
     LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
     MAX_MESSAGE_LENGTH = int(os.getenv("MAX_MESSAGE_LENGTH", "120"))
     LANGUAGE = os.getenv("LANGUAGE", "en").lower()
+    
+    # Development Modes
+    DRY_RUN = os.getenv("DRY_RUN", "false").lower() == "true"
+    DEV_CACHE_ENABLED = os.getenv("DEV_CACHE_ENABLED", "false").lower() == "true"
+    DEV_CACHE_TTL = int(os.getenv("DEV_CACHE_TTL", "86400"))  # 24 hours
+    PROMPTS_HOT_RELOAD = os.getenv("PROMPTS_HOT_RELOAD", "false").lower() == "true"
 
     # Voice Configuration
     VOICE_TRIGGER_KEY = os.getenv("VOICE_TRIGGER_KEY", "f5")
@@ -65,6 +71,16 @@ class Config:
     # Regions of Interest (ROIs)
     # Loaded from rois.json
     VISION_ROIS = {}
+    
+    # Analytics & Cost Tracking
+    ANALYTICS_ENABLED = os.getenv("ANALYTICS_ENABLED", "true").lower() == "true"
+    ANALYTICS_DB_PATH = os.getenv("ANALYTICS_DB_PATH", ".analytics.db")
+    ANALYTICS_RETENTION_DAYS = int(os.getenv("ANALYTICS_RETENTION_DAYS", "90"))
+    
+    # Cost Configuration (per 1K units)
+    OPENAI_COST_PER_1K_TOKENS_INPUT = float(os.getenv("OPENAI_COST_PER_1K_TOKENS_INPUT", "0.00015"))
+    OPENAI_COST_PER_1K_TOKENS_OUTPUT = float(os.getenv("OPENAI_COST_PER_1K_TOKENS_OUTPUT", "0.0006"))
+    ELEVENLABS_COST_PER_1K_CHARS = float(os.getenv("ELEVENLABS_COST_PER_1K_CHARS", "0.30"))
     
     @classmethod
     def load_rois(cls):

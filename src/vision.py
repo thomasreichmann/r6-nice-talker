@@ -5,6 +5,7 @@ import logging
 import mss
 import numpy as np
 import cv2
+import time
 from src.config import Config
 from src.interfaces import IContextObserver
 import pytesseract
@@ -18,7 +19,8 @@ class BaseOCRProvider(IContextObserver):
     Handles screen capture and ROI management.
     """
     def __init__(self) -> None:
-        self.sct = mss.mss()
+        # Don't create mss instance here - create per-capture to avoid threading issues
+        self.sct = None
         # ROIs will be loaded from Config
         self.rois = getattr(Config, "VISION_ROIS", {})
 
@@ -49,19 +51,34 @@ class BaseOCRProvider(IContextObserver):
             return ""
 
         try:
-            # mss grab returns a raw object we can convert to numpy
-            # We need to iterate over configured ROIs
-            
-            for name, region in self.rois.items():
-                # Capture
-                screenshot = self.sct.grab(region)
-                img_np = np.array(screenshot)
+            # Create mss instance per capture to avoid threading issues on Windows
+            with mss.mss() as sct:
+                # mss grab returns a raw object we can convert to numpy
+                # We need to iterate over configured ROIs
+                
+                for name, region in self.rois.items():
+                    # Capture
+                    screenshot = sct.grab(region)
+                    img_np = np.array(screenshot)
                 
                 # Preprocess
                 processed_img = self.preprocess_image(img_np)
                 
-                # Extract
+                # Extract with timing
+                start_time = time.time()
                 text = self.extract_text(processed_img)
+                elapsed_ms = int((time.time() - start_time) * 1000)
+                
+                # Track analytics
+                try:
+                    from src.analytics import get_analytics
+                    analytics = get_analytics()
+                    analytics.track_ocr(
+                        engine=self.__class__.__name__.replace('Provider', '').lower(),
+                        processing_time_ms=elapsed_ms
+                    )
+                except Exception as e:
+                    logger.debug(f"Analytics tracking failed: {e}")
                 
                 if text and len(text.strip()) > 2: # Filter noise
                     clean_text = text.strip().replace("\n", " ")

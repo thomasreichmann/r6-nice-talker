@@ -167,6 +167,8 @@ class AutoChatBot:
                     self._process_next_mode()
                 elif event.type == EventType.PREV_PERSONA:
                     self._process_prev_mode()
+                elif event.type == EventType.PROMPTS_RELOADED:
+                    logger.info("Prompts reloaded event received")
                 elif event.type == EventType.SHUTDOWN:
                     self.is_running = False
                     break

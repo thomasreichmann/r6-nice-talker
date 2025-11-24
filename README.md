@@ -9,6 +9,7 @@ A python script that uses AI to generate and type "wholesome" (or edgy, or salty
 - **Context Aware**: Simulates game events (clutches, losses) to generate relevant banter.
 - **Audio Feedback**: Beeps to confirm actions or persona switches so you don't have to tab out.
 - **Voice Injection**: Text-to-Speech output directly into the game's voice chat via Virtual Cable.
+- **TUI Mode**: Optional terminal-based UI for real-time monitoring (use `--tui` flag).
 
 ## Setup
 
@@ -32,7 +33,11 @@ A python script that uses AI to generate and type "wholesome" (or edgy, or salty
 4.  **Run**:
     -   **Must run as Administrator** to interact with the game window.
     ```bash
+    # Console mode (default)
     python main.py
+    
+    # TUI mode (terminal UI with real-time monitoring)
+    python main.py --tui
     ```
 
 ### Voice Injection Setup
@@ -87,6 +92,28 @@ You can choose between the built-in offline TTS (pyttsx3) or high-quality AI voi
 2.  **Note**: The bot plays the audio into the virtual microphone. You may need to hold your Push-to-Talk key in-game while the bot is speaking.
 
 ## Usage
+
+### Running the Bot
+
+**Console Mode (Default)**:
+```bash
+python main.py
+```
+
+**TUI Mode (Terminal UI)**:
+```bash
+python main.py --tui
+```
+
+The TUI provides real-time monitoring of:
+- Bot status and components
+- Current persona and hotkeys
+- Session statistics (API calls, costs, latency)
+- Event log with timestamps
+
+Press `q` or `Ctrl+C` to exit TUI mode.
+
+### Hotkeys
 -   **F6**: Generate and type a message.
 -   **F5**: Generate and speak a message.
 -   **F8**: Next Persona.
@@ -99,3 +126,9 @@ Edit `prompts.json` to add your own personas or change the style of existing one
 ## Learnings & Architecture
 This project served as a playground for learning how to build robust GenAI wrappers for real-time applications. 
 Check out [LEARNINGS.md](./LEARNINGS.md) for a deep dive into the architectural patterns (Strategy, DI), prompt engineering techniques, and pitfalls encountered during development.
+
+## Documentation
+
+- **[Development Guide](./docs/DEVELOPMENT.md)**: Development workflows, testing tools, and debugging tips
+- **[TUI Documentation](./docs/TUI.md)**: Complete guide to the Terminal User Interface feature
+- **[Architecture Docs](./docs/architecture/)**: Component diagrams and flow documentation

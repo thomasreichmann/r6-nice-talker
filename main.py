@@ -15,7 +15,85 @@ from src.voice import SoundDevicePlayer
 from src.logging_config import setup_logging
 
 
-async def main(verbose: bool = False, dry_run: bool = False) -> None:
+def _create_bot_sync():
+    """Helper function to create and configure the bot synchronously (for TUI mode)."""
+    # Start analytics session if enabled
+    from src.analytics import get_analytics
+    analytics = get_analytics()
+    analytics.start_session()
+    
+    # Assemble dependencies
+    event_bus = EventBus()
+    provider = get_message_provider(event_bus=event_bus)
+    typer = get_chat_typer()
+    
+    # Voice dependencies
+    tts_engine = get_tts_engine()
+    audio_player = SoundDevicePlayer(
+        device_name=Config.AUDIO_OUTPUT_DEVICE_NAME,
+        device_index=Config.AUDIO_OUTPUT_DEVICE_INDEX,
+        monitor=Config.AUDIO_MONITORING
+    )
+    
+    # Context/Observer dependencies
+    context_observer = get_context_observer()
+    
+    app = AutoChatBot(
+        trigger_key=Config.TRIGGER_KEY,
+        voice_trigger_key=Config.VOICE_TRIGGER_KEY,
+        message_provider=provider,
+        chat_typer=typer,
+        event_bus=event_bus,
+        context_observer=context_observer,
+        tts_engine=tts_engine,
+        audio_player=audio_player,
+        next_mode_key=Config.NEXT_PROMPT_KEY,
+        prev_mode_key=Config.PREV_PROMPT_KEY
+    )
+    
+    return app, event_bus, analytics
+
+
+async def _create_bot():
+    """Helper function to create and configure the bot."""
+    # Start analytics session if enabled
+    from src.analytics import get_analytics
+    analytics = get_analytics()
+    analytics.start_session()
+    
+    # Assemble dependencies
+    event_bus = EventBus()
+    provider = get_message_provider(event_bus=event_bus)
+    typer = get_chat_typer()
+    
+    # Voice dependencies
+    tts_engine = get_tts_engine()
+    audio_player = SoundDevicePlayer(
+        device_name=Config.AUDIO_OUTPUT_DEVICE_NAME,
+        device_index=Config.AUDIO_OUTPUT_DEVICE_INDEX,
+        monitor=Config.AUDIO_MONITORING
+    )
+    
+    # Context/Observer dependencies
+    context_observer = get_context_observer()
+    
+    app = AutoChatBot(
+        trigger_key=Config.TRIGGER_KEY,
+        voice_trigger_key=Config.VOICE_TRIGGER_KEY,
+        message_provider=provider,
+        chat_typer=typer,
+        event_bus=event_bus,
+        context_observer=context_observer,
+        tts_engine=tts_engine,
+        audio_player=audio_player,
+        next_mode_key=Config.NEXT_PROMPT_KEY,
+        prev_mode_key=Config.PREV_PROMPT_KEY
+    )
+    
+    return app, event_bus, analytics
+
+
+async def main(verbose: bool = False, dry_run: bool = False, tui_mode: bool = False) -> None:
     """
     Main application entry point.
     Sets up logging, applies patches, initializes the bot, and starts the main loop.
@@ -23,6 +101,7 @@ async def main(verbose: bool = False, dry_run: bool = False) -> None:
     Args:
         verbose: Enable DEBUG level logging with JSON format
         dry_run: Enable dry-run mode (mock API calls, no actual typing)
+        tui_mode: Enable TUI mode (Textual-based terminal UI)
     """
     setup_logging(verbose=verbose)
     logger = logging.getLogger(__name__)
@@ -35,44 +114,76 @@ async def main(verbose: bool = False, dry_run: bool = False) -> None:
     patch_pydirectinput()
     
     try:
-        # Start analytics session if enabled
-        from src.analytics import get_analytics
-        analytics = get_analytics()
-        analytics.start_session()
+        # Create bot components
+        app, event_bus, analytics = await _create_bot()
         
-        # Assemble dependencies
-        event_bus = EventBus()
-        provider = get_message_provider(event_bus=event_bus)
-        typer = get_chat_typer()
+        logger.info(f"TTS Engine: {app.tts_engine.__class__.__name__ if app.tts_engine else 'None'}")
+        logger.info(f"Context Observer: {app.context_observer.__class__.__name__ if app.context_observer else 'None'}")
         
-        # Voice dependencies
-        tts_engine = get_tts_engine()
-        audio_player = SoundDevicePlayer(
-            device_name=Config.AUDIO_OUTPUT_DEVICE_NAME,
-            device_index=Config.AUDIO_OUTPUT_DEVICE_INDEX,
-            monitor=Config.AUDIO_MONITORING
-        )
-        
-        # Context/Observer dependencies
-        context_observer = get_context_observer()
-        
-        logger.info(f"TTS Engine: {tts_engine.__class__.__name__}")
-        logger.info(f"Context Observer: {context_observer.__class__.__name__}")
-        
-        app = AutoChatBot(
-            trigger_key=Config.TRIGGER_KEY,
-            voice_trigger_key=Config.VOICE_TRIGGER_KEY,
-            message_provider=provider,
-            chat_typer=typer,
-            event_bus=event_bus,
-            context_observer=context_observer,
-            tts_engine=tts_engine,
-            audio_player=audio_player,
-            next_mode_key=Config.NEXT_PROMPT_KEY,
-            prev_mode_key=Config.PREV_PROMPT_KEY
-        )
-        
+        # TUI mode should be handled before async context
+        # This should not be reached in TUI mode
         await app.start()
+        
+    except KeyboardInterrupt:
+        logger.info("Application stopped by user.")
+    except Exception as e:
+        logger.critical(f"Fatal error: {e}", exc_info=True)
+        sys.exit(1)
+    finally:
+        # End analytics session
+        try:
+            from src.analytics import get_analytics
+            analytics = get_analytics()
+            analytics.end_session()
+            
+            # Show session stats
+            stats = analytics.get_session_stats()
+            if stats:
+                logger.info(f"Session stats: {stats['api_call_count']} API calls, "
+                           f"{stats['tts_count']} TTS generations, "
+                           f"${stats['total_cost']:.6f} total cost")
+        except Exception:
+            pass
+
+
+def run_tui_mode(verbose: bool = False, dry_run: bool = False):
+    """Run the application in TUI mode (synchronous)."""
+    setup_logging(verbose=verbose)
+    logger = logging.getLogger(__name__)
+    
+    if dry_run:
+        logger.warning("DRY-RUN MODE ENABLED - No actual API calls or typing will occur")
+        Config.DRY_RUN = True
+    
+    # Apply monkey-patches
+    patch_pydirectinput()
+    
+    try:
+        # Create bot components synchronously
+        app, event_bus, analytics = _create_bot_sync()
+        
+        logger.info(f"TTS Engine: {app.tts_engine.__class__.__name__ if app.tts_engine else 'None'}")
+        logger.info(f"Context Observer: {app.context_observer.__class__.__name__ if app.context_observer else 'None'}")
+        
+        try:
+            from src.tui import BotTUI
+            
+            # Create TUI app
+            tui_app = BotTUI(bot=app, event_bus=event_bus, analytics=analytics)
+            
+            # Run TUI (Textual handles its own event loop)
+            # The TUI will start the bot as a background task
+            tui_app.run()
+            
+        except ImportError as e:
+            logger.warning(f"Failed to import TUI module: {e}. Falling back to console mode.")
+            logger.warning("Make sure 'textual' is installed: pip install textual")
+            # Fall back to async console mode
+            asyncio.run(app.start())
+        except Exception as e:
+            logger.warning(f"TUI initialization failed: {e}. Falling back to console mode.", exc_info=True)
+            # Fall back to async console mode
+            asyncio.run(app.start())
         
     except KeyboardInterrupt:
         logger.info("Application stopped by user.")
@@ -108,11 +219,21 @@ if __name__ == "__main__":
         action="store_true",
         help="Enable dry-run mode (mock API calls, no actual typing)"
     )
+    parser.add_argument(
+        "--tui",
+        action="store_true",
+        help="Enable TUI mode (Textual-based terminal UI)"
+    )
     
     args = parser.parse_args()
     
     try:
-        asyncio.run(main(verbose=args.verbose, dry_run=args.dry_run))
+        if args.tui:
+            # TUI mode - run synchronously
+            run_tui_mode(verbose=args.verbose, dry_run=args.dry_run)
+        else:
+            # Console mode - run asynchronously
+            asyncio.run(main(verbose=args.verbose, dry_run=args.dry_run, tui_mode=False))
     except KeyboardInterrupt:
         # Handle Ctrl+C from the event loop runner itself
         pass

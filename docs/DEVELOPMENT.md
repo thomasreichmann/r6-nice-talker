@@ -7,6 +7,7 @@ This guide covers common development workflows, debugging techniques, and best p
 - [Development Tools](#development-tools)
 - [Common Workflows](#common-workflows)
 - [Development Modes](#development-modes)
+- [TUI Development](#tui-development)
 - [Debugging Tips](#debugging-tips)
 - [Cost Management](#cost-management)
 - [Performance Optimization](#performance-optimization)
@@ -193,6 +194,25 @@ Enables DEBUG logging with JSON format:
 ```bash
 python main.py --verbose
 ```
+
+### TUI Mode
+
+Terminal User Interface for real-time monitoring:
+
+```bash
+python main.py --tui
+```
+
+**Features:**
+- Real-time status display
+- Event log with timestamps
+- Session statistics (auto-updates every 5 seconds)
+- Hotkey reference
+
+**Development:**
+- See [TUI Documentation](./TUI.md) for complete details
+- Test TUI changes: `python main.py --tui --dry-run`
+- TUI automatically falls back to console mode on errors
 
 **Output includes:**
 - Full API request/response (sanitized keys)

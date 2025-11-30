@@ -21,7 +21,7 @@ The project uses a **factory pattern** with **interface-based dependency injecti
 User Input (Hotkey) → Event Bus → Bot Controller → Provider/TTS/Typer → Game
 ```
 
-See [docs/architecture/](docs/architecture/) for detailed Mermaid diagrams.
+See [docs/architecture/](./docs/architecture/) for detailed Mermaid diagrams.
 
 ### Key Architectural Patterns
 

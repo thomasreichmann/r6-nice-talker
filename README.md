@@ -123,12 +123,10 @@ Press `q` or `Ctrl+C` to exit TUI mode.
 ## Customization
 Edit `prompts.json` to add your own personas or change the style of existing ones.
 
-## Learnings & Architecture
-This project served as a playground for learning how to build robust GenAI wrappers for real-time applications. 
-Check out [LEARNINGS.md](./LEARNINGS.md) for a deep dive into the architectural patterns (Strategy, DI), prompt engineering techniques, and pitfalls encountered during development.
-
 ## Documentation
 
-- **[Development Guide](./docs/DEVELOPMENT.md)**: Development workflows, testing tools, and debugging tips
-- **[TUI Documentation](./docs/TUI.md)**: Complete guide to the Terminal User Interface feature
-- **[Architecture Docs](./docs/architecture/)**: Component diagrams and flow documentation
+- **[Development Guide](./docs/development.md)** - Testing tools, debugging, and cost management
+- **[TUI Guide](./docs/tui.md)** - Terminal User Interface features and usage
+- **[Architecture](./docs/architecture/)** - Component diagrams and flow documentation
+- **[Learnings](./docs/learnings.md)** - Design patterns and lessons learned
+- **[Roadmap](./docs/roadmap.md)** - Future features and enhancements

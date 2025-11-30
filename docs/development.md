@@ -210,7 +210,7 @@ python main.py --tui
 - Hotkey reference
 
 **Development:**
-- See [TUI Documentation](./TUI.md) for complete details
+- See [TUI Documentation](./tui.md) for complete details
 - Test TUI changes: `python main.py --tui --dry-run`
 - TUI automatically falls back to console mode on errors
 

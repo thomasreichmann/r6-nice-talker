@@ -31,6 +31,10 @@ class Config:
     if AUDIO_OUTPUT_DEVICE_INDEX:
         AUDIO_OUTPUT_DEVICE_INDEX = int(AUDIO_OUTPUT_DEVICE_INDEX)
     
+    # Audio Driver Preference (e.g., "WASAPI", "DirectSound", "ASIO", "MME")
+    # If set, will attempt to find device in this driver first, then fallback to others
+    AUDIO_PREFERRED_DRIVER = os.getenv("AUDIO_PREFERRED_DRIVER")  # None = No preference
+    
     # Audio Monitoring (Hear what the bot says)
     AUDIO_MONITORING = os.getenv("AUDIO_MONITORING", "true").lower() == "true"
 

@@ -6,6 +6,7 @@ import asyncio
 import argparse
 import sys
 import os
+import random
 from pathlib import Path
 
 # Add parent directory to path for imports
@@ -17,6 +18,13 @@ from src.logging_config import setup_logging
 import logging
 
 logger = logging.getLogger(__name__)
+
+# Predefined test messages for quick testing
+TEST_MESSAGES = [
+    "Good luck, have fun!",
+    "Nice play, team!",
+    "Let's win this round!"
+]
 
 
 async def test_tts(
@@ -86,7 +94,8 @@ async def test_tts(
             player = SoundDevicePlayer(
                 device_name=Config.AUDIO_OUTPUT_DEVICE_NAME,
                 device_index=Config.AUDIO_OUTPUT_DEVICE_INDEX,
-                monitor=Config.AUDIO_MONITORING
+                monitor=Config.AUDIO_MONITORING,
+                preferred_driver=Config.AUDIO_PREFERRED_DRIVER
             )
             
             # Temporarily save the path to prevent deletion
@@ -124,9 +133,12 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
+  python tools/test_tts.py --provider pyttsx3
   python tools/test_tts.py --text "Hello world" --provider pyttsx3
   python tools/test_tts.py --text "Testing voice" --provider elevenlabs --save
   python tools/test_tts.py --provider pyttsx3 --rate 200 --no-play --save
+
+Note: If --text is not provided, a random test message will be selected automatically.
         """
     )
     
@@ -140,7 +152,7 @@ Examples:
     parser.add_argument(
         "--text",
         type=str,
-        help="Text to synthesize (if not provided, prompts interactively)"
+        help="Text to synthesize (if not provided, randomly selects from predefined test messages)"
     )
     
     parser.add_argument(
@@ -179,17 +191,11 @@ Examples:
     # Setup logging
     setup_logging(verbose=args.verbose)
     
-    # Get text interactively if not provided
+    # Get text - use provided text, or randomly select from test messages
     text = args.text
     if not text:
-        print("\nEnter text to synthesize (or 'quit' to exit):")
-        text = input("> ").strip()
-        if text.lower() in ['quit', 'exit', 'q']:
-            print("Exiting...")
-            return
-        if not text:
-            print("No text provided. Exiting...")
-            return
+        text = random.choice(TEST_MESSAGES)
+        logger.info(f"No text provided, using random test message: '{text}'")
     
     # Run test
     try:

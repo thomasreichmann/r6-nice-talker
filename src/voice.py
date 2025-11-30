@@ -213,7 +213,7 @@ class SoundDevicePlayer(IAudioPlayer):
     Plays audio using the 'sounddevice' library, supporting specific output devices.
     Useful for playing audio into a virtual cable.
     """
-    def __init__(self, device_name: Optional[str] = None, device_index: Optional[int] = None, monitor: bool = True) -> None:
+    def __init__(self, device_name: Optional[str] = None, device_index: Optional[int] = None, monitor: bool = True, preferred_driver: Optional[str] = None) -> None:
         """
         Initialize the player with a target device.
         
@@ -221,10 +221,13 @@ class SoundDevicePlayer(IAudioPlayer):
             device_name (str, optional): Name (or partial name) of the device to use.
             device_index (int, optional): Specific index of the device to use. Takes precedence over name.
             monitor (bool): If True, plays audio to the system default device as well.
+            preferred_driver (str, optional): Preferred audio driver/API (e.g., "WASAPI", "DirectSound", "ASIO").
+                                             If set, will attempt to find device in this driver first, then fallback to others.
         """
         self.device_index = device_index
         self.device_name = device_name
         self.monitor = monitor
+        self.preferred_driver = preferred_driver
         self.target_device = self._find_device()
         
         # We re-query default device at runtime in _play_blocking usually, 
@@ -238,7 +241,9 @@ class SoundDevicePlayer(IAudioPlayer):
         if self.target_device is not None:
             try:
                 info = sd.query_devices(self.target_device)
-                logger.info(f"Audio Player configured to use: [{self.target_device}] {info['name']}")
+                host_api_name = sd.query_hostapis(info['hostapi'])['name']
+                api_status = "MME" if host_api_name == "MME" else f"non-MME ({host_api_name})"
+                logger.info(f"Audio Player configured to use: [{self.target_device}] {info['name']} (API: {api_status})")
                 if self.monitor:
                     logger.info("Audio Monitoring Enabled (System Default)")
             except Exception as e:
@@ -251,6 +256,8 @@ class SoundDevicePlayer(IAudioPlayer):
     def _find_device(self) -> Optional[int]:
         """
         Resolves the device index based on configuration.
+        If preferred_driver is set, attempts to find device in that driver first,
+        then falls back to other drivers. Otherwise, prefers non-MME devices.
         """
         # 1. Specific index provided
         if self.device_index is not None:
@@ -259,19 +266,94 @@ class SoundDevicePlayer(IAudioPlayer):
         # 2. Search by name
         if self.device_name:
             logger.debug(f"Searching for audio device matching: '{self.device_name}'")
+            if self.preferred_driver:
+                logger.debug(f"Preferred driver: '{self.preferred_driver}'")
             try:
                 devices = sd.query_devices()
+                host_apis = sd.query_hostapis()
                 
-                # Try exact match
+                # Helper function to get API name for a device
+                def get_api_name(device):
+                    try:
+                        return host_apis[device['hostapi']]['name']
+                    except (KeyError, IndexError):
+                        return None
+                
+                # Helper function to check if device uses a specific API
+                def is_api_device(device, api_name):
+                    return get_api_name(device) == api_name
+                
+                # Helper function to check if device uses MME API
+                def is_mme_device(device):
+                    return is_api_device(device, "MME")
+                
+                # If preferred driver is set, try to find device in that driver first
+                if self.preferred_driver:
+                    preferred_driver_upper = self.preferred_driver.upper()
+                    
+                    # Try exact match in preferred driver
+                    for i, device in enumerate(devices):
+                        if (self.device_name == device['name'] and 
+                            device['max_output_channels'] > 0 and
+                            is_api_device(device, preferred_driver_upper)):
+                            logger.info(f"Found exact match in preferred driver '{preferred_driver_upper}': '{device['name']}'")
+                            return i
+                    
+                    # Try partial match in preferred driver
+                    for i, device in enumerate(devices):
+                        if (self.device_name.lower() in device['name'].lower() and 
+                            device['max_output_channels'] > 0 and
+                            is_api_device(device, preferred_driver_upper)):
+                            logger.info(f"Found partial match in preferred driver '{preferred_driver_upper}': '{device['name']}'")
+                            return i
+                    
+                    logger.info(f"Device '{self.device_name}' not found in preferred driver '{preferred_driver_upper}', searching other drivers...")
+                
+                # Fallback: search in all drivers (prefer non-MME if no preferred driver)
+                # Try exact match - prefer non-MME first
+                non_mme_match = None
+                mme_match = None
+                
                 for i, device in enumerate(devices):
                     if self.device_name == device['name'] and device['max_output_channels'] > 0:
-                        return i
+                        if self.preferred_driver and is_api_device(device, self.preferred_driver.upper()):
+                            # Already checked preferred driver above, skip
+                            continue
+                        elif not is_mme_device(device):
+                            if non_mme_match is None:
+                                non_mme_match = i
+                        elif mme_match is None:
+                            mme_match = i
                 
-                # Try partial match
+                if non_mme_match is not None:
+                    logger.info(f"Found exact match (non-MME): '{devices[non_mme_match]['name']}'")
+                    return non_mme_match
+                
+                # Try partial match - prefer non-MME first
+                non_mme_partial = None
+                mme_partial = None
+                
                 for i, device in enumerate(devices):
-                    if self.device_name.lower() in device['name'].lower() and device['max_output_channels'] > 0:
-                        logger.info(f"Found partial match for device: '{device['name']}'")
-                        return i
+                    if (self.device_name.lower() in device['name'].lower() and 
+                        device['max_output_channels'] > 0):
+                        if self.preferred_driver and is_api_device(device, self.preferred_driver.upper()):
+                            # Already checked preferred driver above, skip
+                            continue
+                        elif not is_mme_device(device):
+                            if non_mme_partial is None:
+                                non_mme_partial = i
+                                logger.info(f"Found partial match (non-MME): '{device['name']}'")
+                        elif mme_partial is None:
+                            mme_partial = i
+                
+                if non_mme_partial is not None:
+                    return non_mme_partial
+                if mme_partial is not None:
+                    logger.info(f"Found partial match (MME, fallback): '{devices[mme_partial]['name']}'")
+                    return mme_partial
+                if mme_match is not None:
+                    logger.info(f"Found exact match (MME, fallback): '{devices[mme_match]['name']}'")
+                    return mme_match
                 
                 logger.warning(f"Audio device '{self.device_name}' not found. Falling back to system default.")
             except Exception as e:

@@ -32,7 +32,8 @@ def _create_bot_sync():
     audio_player = SoundDevicePlayer(
         device_name=Config.AUDIO_OUTPUT_DEVICE_NAME,
         device_index=Config.AUDIO_OUTPUT_DEVICE_INDEX,
-        monitor=Config.AUDIO_MONITORING
+        monitor=Config.AUDIO_MONITORING,
+        preferred_driver=Config.AUDIO_PREFERRED_DRIVER
     )
     
     # Context/Observer dependencies
@@ -71,7 +72,8 @@ async def _create_bot():
     audio_player = SoundDevicePlayer(
         device_name=Config.AUDIO_OUTPUT_DEVICE_NAME,
         device_index=Config.AUDIO_OUTPUT_DEVICE_INDEX,
-        monitor=Config.AUDIO_MONITORING
+        monitor=Config.AUDIO_MONITORING,
+        preferred_driver=Config.AUDIO_PREFERRED_DRIVER
     )
     
     # Context/Observer dependencies

@@ -2,50 +2,33 @@
 
 The event bus enables thread-safe communication between keyboard callbacks (threads) and the main async event loop.
 
-```mermaid
-graph TB
-    subgraph "Thread Context"
-        KB[Keyboard Library<br/>separate threads]
-        CB1[Callback: F6 pressed]
-        CB2[Callback: F5 pressed]
-        CB3[Callback: F7 pressed]
-        CB4[Callback: F8 pressed]
-    end
-    
-    subgraph "Event Bus"
-        EB[EventBus]
-        Q[asyncio.Queue]
-    end
-    
-    subgraph "Async Context"
-        Loop[Main Event Loop]
-        Handler[Event Handlers]
-        ProcessChat[_process_trigger_chat]
-        ProcessVoice[_process_trigger_voice]
-        NextMode[_process_next_mode]
-        PrevMode[_process_prev_mode]
-    end
-    
-    KB --> CB1
-    KB --> CB2
-    KB --> CB3
-    KB --> CB4
-    
-    CB1 -->|publish| EB
-    CB2 -->|publish| EB
-    CB3 -->|publish| EB
-    CB4 -->|publish| EB
-    
-    EB -->|call_soon_threadsafe| Q
-    
-    Q -->|await get| Loop
-    Loop --> Handler
-    
-    Handler -->|TRIGGER_CHAT| ProcessChat
-    Handler -->|TRIGGER_VOICE| ProcessVoice
-    Handler -->|NEXT_PERSONA| NextMode
-    Handler -->|PREV_PERSONA| PrevMode
-```
+## High-Level Structure
+
+- **Thread context (input side)**:
+  - A keyboard library runs hotkey callbacks (F5, F6, F7, F8, etc.) in **separate OS threads**.
+  - Each hotkey is bound to a small callback function that constructs an `Event` (for example, `TRIGGER_CHAT` or `TRIGGER_VOICE`) and calls `event_bus.publish(event)`.
+
+- **Event bus core**:
+  - The `EventBus` holds a reference to the main asyncio event loop and an internal `asyncio.Queue`.
+  - When `publish()` is called from any thread, the bus uses `loop.call_soon_threadsafe(self._queue.put_nowait, event)` to safely enqueue the event into the async queue.
+
+- **Async context (processing side)**:
+  - The bot’s main coroutine runs in the asyncio event loop and continuously awaits `queue.get()`.
+  - As events arrive, they are dispatched to appropriate handlers such as:
+    - `_process_trigger_chat` for `TRIGGER_CHAT` (F6)
+    - `_process_trigger_voice` for `TRIGGER_VOICE` (F5)
+    - `_process_next_mode` for `NEXT_PERSONA` (F8)
+    - `_process_prev_mode` for `PREV_PERSONA` (F7)
+
+## End-to-End Flow
+
+1. **User presses a hotkey** (e.g. F6 for text chat).
+2. **Keyboard library callback** runs in its own thread and builds an `Event` with the matching type.
+3. The callback calls **`event_bus.publish(event)`**.
+4. `EventBus.publish` uses **`call_soon_threadsafe`** to schedule `queue.put_nowait(event)` on the main asyncio loop, avoiding any direct cross-thread async calls.
+5. The **main event loop** (running in the bot) is already awaiting `queue.get()`; it receives the new event.
+6. The **event dispatcher** in the bot examines `event.type` and routes the event to the correct async handler.
+7. The **handler coroutine** performs the appropriate action (generate text, generate voice, change persona, etc.) within the async context.
 
 ## Event Types
 

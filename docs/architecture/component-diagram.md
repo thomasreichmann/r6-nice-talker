@@ -1,81 +1,52 @@
-# Component Dependency Diagram
+## Factory and Implementations
 
-This diagram shows the high-level component relationships and dependencies in the R6 Nice Talker project.
+- **`src/factory.py`**
+  - Acts as a simple dependency injection container.
+  - Based on configuration, it chooses concrete implementations for:
+    - Providers (`src/providers.py`).
+    - Typers (`src/typers.py`).
+    - Voice / TTS engines (`src/voice.py`).
+    - Vision / OCR observers (`src/vision.py`).
 
-```mermaid
-graph TB
-    Main[main.py] --> Factory[factory.py]
-    Main --> Bot[bot.py]
-    Main --> EventBus[events.py]
-    Main --> Analytics[analytics.py]
-    
-    Bot --> Interfaces[interfaces.py]
-    Bot --> EventBus
-    Bot --> Provider[IMessageProvider]
-    Bot --> Typer[IChatTyper]
-    Bot --> TTS[ITextToSpeech]
-    Bot --> Observer[IContextObserver]
-    
-    Factory --> Providers[providers.py]
-    Factory --> Typers[typers.py]
-    Factory --> Voice[voice.py]
-    Factory --> Vision[vision.py]
-    
-    Providers -.implements.-> Provider
-    Providers --> Config[config.py]
-    Providers --> Cache[cache.py]
-    Providers --> Analytics
-    Providers --> Constants[constants.py]
-    
-    Typers -.implements.-> Typer
-    Typers --> Config
-    
-    Voice -.implements.-> TTS
-    Voice --> Config
-    Voice --> Analytics
-    
-    Vision -.implements.-> Observer
-    Vision --> Config
-    Vision --> Analytics
-    
-    Config --> Env[.env file]
-    
-    style Interfaces fill:#e1f5ff
-    style Provider fill:#e1f5ff
-    style Typer fill:#e1f5ff
-    style TTS fill:#e1f5ff
-    style Observer fill:#e1f5ff
-    style Main fill:#fff4e1
-    style Bot fill:#fff4e1
-```
+- **Providers (`src/providers.py`)**
+  - Implement the `IMessageProvider` interface.
+  - Depend on:
+    - `src/config.py` for API keys, model configuration, and feature flags.
+    - `src/cache.py` for response caching.
+    - `src/analytics.py` for tracking token usage and costs.
+    - `src/constants.py` for reusable prompt fragments and defaults.
 
-## Component Layers
+- **Typers (`src/typers.py`)**
+  - Implement the `IChatTyper` interface.
+  - Use `src/config.py` to respect settings like typing delays and key bindings.
 
-### Layer 1: Interfaces
-- **`src/interfaces.py`**: Defines contracts for all pluggable components
-- Enables dependency injection and testability
+- **Voice / TTS (`src/voice.py`)**
+  - Implement the `ITextToSpeech` interface.
+  - Depend on `src/config.py` for provider selection and audio device names.
+  - Report usage and latency to `src/analytics.py`.
 
-### Layer 2: Implementations
-- **`src/providers.py`**: Message generation (ChatGPT, Fixed, Random)
-- **`src/typers.py`**: Chat typing (R6Siege, Debug)
-- **`src/voice.py`**: TTS engines (ElevenLabs, pyttsx3)
-- **`src/vision.py`**: OCR providers (EasyOCR, Tesseract)
+- **Vision / OCR (`src/vision.py`)**
+  - Implement the `IContextObserver` interface.
+  - Use `src/config.py` to locate ROI definitions and engine choices.
+  - Send performance metrics to `src/analytics.py`.
 
-### Layer 3: Infrastructure
-- **`src/events.py`**: Event bus for async communication
-- **`src/analytics.py`**: Usage tracking and cost calculation
-- **`src/cache.py`**: Development cache for API responses
-- **`src/config.py`**: Configuration management
+## Shared Infrastructure
 
-### Layer 4: Application
-- **`main.py`**: Entry point, CLI argument handling
-- **`src/bot.py`**: Main controller, hotkey binding, orchestration
-- **`src/factory.py`**: Dependency injection container
+- **`src/interfaces.py`**
+  - Defines all the core contracts (`IMessageProvider`, `IChatTyper`, `ITextToSpeech`, `IContextObserver`, etc.).
+  - Allows components to be swapped or mocked in tests without changing the bot logic.
 
-## Key Design Decisions
+- **`src/config.py`**
+  - Central configuration layer, typically reading from the `.env` file and environment variables.
+  - Provides typed accessors for settings used throughout providers, typers, voice, and vision.
 
-1. **Interface-based architecture**: All components implement interfaces for easy swapping and testing
-2. **Factory pattern**: Centralizes object creation based on configuration
-3. **Event-driven**: Decouples hotkey handlers from business logic
-4. **Singleton patterns**: Config, Cache, and Analytics use singletons for global access
+- **`src/analytics.py`**
+  - Records API usage (tokens, cost, latency) and TTS metrics.
+  - Used by providers, TTS engines, and vision to log operational data.
+
+- **`src/cache.py`**
+  - Holds short‑lived cached responses to reduce repeated API calls during development.
+
+- **`.env` file**
+  - Source of secrets and environment-specific configuration (API keys, device names, feature toggles).
 

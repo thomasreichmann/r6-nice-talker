@@ -1,54 +1,55 @@
 # Message Generation Flow (Text)
 
-This sequence diagram shows the flow when a user presses the text message hotkey.
+This section explains the flow when a user presses the text message hotkey.
 
-```mermaid
-sequenceDiagram
-    participant User
-    participant Keyboard
-    participant EventBus
-    participant Bot
-    participant Observer as Context Observer
-    participant Provider
-    participant Cache
-    participant OpenAI
-    participant Analytics
-    participant Typer
-    participant Game
-    
-    User->>Keyboard: Press F6 (text hotkey)
-    Keyboard->>EventBus: publish(TRIGGER_CHAT)
-    
-    EventBus->>Bot: get() → TRIGGER_CHAT event
-    Bot->>Bot: _process_trigger_chat()
-    
-    Bot->>Observer: get_context()
-    Observer->>Observer: Capture screen ROIs
-    Observer->>Observer: Run OCR
-    Observer-->>Bot: "KILLFEED: Player eliminated"
-    
-    Bot->>Provider: get_message(mode="text", context="...")
-    
-    Provider->>Cache: get(persona, context, mode)
-    
-    alt Cache Hit
-        Cache-->>Provider: Cached message
-    else Cache Miss
-        Provider->>OpenAI: chat.completions.create(...)
-        OpenAI-->>Provider: Generated message + tokens
-        Provider->>Analytics: track_api_call(tokens, cost, latency)
-        Provider->>Cache: set(message, persona, context, mode)
-    end
-    
-    Provider-->>Bot: "gg ez"
-    
-    Bot->>Typer: send("gg ez")
-    Typer->>Game: Press 'y'
-    Typer->>Game: Type characters...
-    Typer->>Game: Press 'enter'
-    
-    Game-->>User: Message appears in chat
-```
+## End-to-End Flow
+
+1. **User input**
+   - The user presses the F6 hotkey (configured as the text message trigger).
+   - The keyboard library running in a separate thread invokes the bound callback.
+
+2. **Event publication**
+   - The callback publishes a `TRIGGER_CHAT` event to the event bus.
+   - The event bus schedules this event onto the main asyncio loop using its internal queue.
+
+3. **Event handling in the bot**
+   - The bot’s main loop awaits events from the queue.
+   - When it receives `TRIGGER_CHAT`, it calls `_process_trigger_chat()`.
+
+4. **Optional context gathering**
+   - `_process_trigger_chat()` asks the context observer (`get_context()`) for the current game context.
+   - The observer may:
+     - Capture configured screen ROIs.
+     - Run OCR over each ROI.
+     - Return a summarized string such as `"KILLFEED: Player eliminated"` or an empty string if no useful context is found.
+
+5. **Message generation request**
+   - The bot calls `provider.get_message(mode="text", context=context_string)`.
+   - The provider decides how to construct a prompt and which backend to use (e.g. OpenAI).
+
+6. **Cache lookup**
+   - Before making an API call, the provider asks the cache:
+     - `cache.get(persona, context, mode)`.
+   - If there is a **cache hit**, the cached message is returned immediately.
+
+7. **API call and analytics (cache miss path)**
+   - If there is a **cache miss**, the provider calls the OpenAI Chat Completions API.
+   - The API responds with a generated message and token usage details.
+   - The provider records analytics for this call (tokens, cost, latency).
+   - The provider stores the result in the cache for future reuse.
+
+8. **Message returned to bot**
+   - The provider returns the final text (e.g. `"gg ez"`) to the bot.
+
+9. **Typing into the game**
+   - The bot asks the typer to `send("gg ez")`.
+   - The typer simulates key presses:
+     - Presses the chat key (typically `y` in Rainbow Six Siege).
+     - Types the message characters one by one with optional delays.
+     - Presses `Enter` to send the message.
+
+10. **Result in-game**
+    - The game receives the simulated input, and the message appears in the in‑game chat for all players to see.
 
 ## Flow Steps
 
